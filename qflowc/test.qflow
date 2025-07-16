@@ -1,0 +1,5 @@
+workflow my-test-workflow {
+    task my-first-task {
+        image: "alpine:latest"
+    }
+}

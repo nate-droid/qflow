@@ -1,0 +1,9 @@
+apiVersion: qflow.io/v1alpha1
+kind: QuantumWorkflow
+metadata:
+  name: my-test-workflow2
+  namespace: qflow-system
+spec:
+  tasks:
+    - name: my-first-task
+      image: alpine:latest

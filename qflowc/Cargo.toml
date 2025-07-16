@@ -1,0 +1,13 @@
+[package]
+name = "qflowc"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+chumsky = "0.9.0"   # A powerful parser combinator library
+serde = { version = "1.0", features = ["derive"] } # For serializing/deserializing data
+serde_yaml = "0.9" # For converting our structs to YAML
+k8s-openapi = { version = "0.18.0", features = ["v1_26"] } # Provides Kubernetes API types (optional but good practice)
+clap = { version = "4.0", features = ["derive"] } # For command-line argument parsing
+anyhow = "1.0" # For flexible error handling
+qflow-types = { path = "../qflow-types" }
