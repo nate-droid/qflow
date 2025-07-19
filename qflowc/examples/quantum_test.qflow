@@ -1,0 +1,7 @@
+workflow my-quantum-workflow {
+    task run-bell-state {
+        image: "qsim",
+        circuit_from: "qflowc/examples/bell_circuit.qasm",
+        params_from: "qflowc/examples/sim_params.json"
+    }
+}

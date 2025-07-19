@@ -10,21 +10,36 @@ use schemars::JsonSchema;
 #[kube(group = "qflow.io", version = "v1alpha1", kind = "QuantumWorkflow", namespaced, status = "QuantumWorkflowStatus")]
 #[serde(rename_all = "camelCase")]
 pub struct QuantumWorkflowSpec {
-    pub tasks: Vec<Task>,
+    pub tasks: Vec<QFlowTask>,
 }
 
 /// Represents a single task in the workflow.
 #[derive(Deserialize, Serialize, Clone, Debug, Default, JsonSchema)]
-pub struct Task {
+pub struct QFlowTask {
     pub name: String,
-    pub image: String,
+    #[serde(flatten)]
+    pub spec: QFlowTaskSpec,
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, Deserialize, Clone, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-pub struct TaskSpec {
-    pub name: String,
-    pub image: String,
+pub enum QFlowTaskSpec {
+    Classical {
+        image: String,
+    },
+    Quantum {
+        image: String,
+        circuit: String, // The full QASM circuit as a string
+        params: String,  // The full parameters JSON as a string
+    },
+}
+
+impl Default for QFlowTaskSpec {
+    fn default() -> Self {
+        QFlowTaskSpec::Classical {
+            image: String::new(),
+        }
+    }
 }
 
 /// Represents the observed state of a QuantumWorkflow.
