@@ -1,0 +1,3 @@
+FROM busybox:latest
+# Create the output file and sleep to simulate work
+CMD ["/bin/sh", "-c", "echo '{\"message\": \"hello from task-a\"}' > /workspace/task-a-output.json && echo 'Producer finished.' && sleep 5"]

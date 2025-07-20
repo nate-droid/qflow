@@ -19,4 +19,6 @@ kube-derive = "~0.52" # Support for Custom Resource Definitions
 kube-runtime = "1.1.0" # Custom controller support
 schemars = "~0.8"
 futures-util = "0.3.31"
-qflow-types = { path = "../qflow-types" } # Local dependency for qflowc
+qflow-types = { path = "../qflow-types" }
+# petgraph = "0.8.2" # Local dependency for qflowc
+petgraph = "0.8.2"

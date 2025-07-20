@@ -5,7 +5,7 @@ use std::io::Read;
 use std::path::PathBuf;
 
 // FIX: Import the renamed types directly without aliasing.
-use qflow_types::{QuantumWorkflow, QuantumWorkflowSpec, QFlowTask, QFlowTaskSpec};
+use qflow_types::{QuantumWorkflow, QuantumWorkflowSpec, QFlowTask, QFlowTaskSpec, VolumeSpec};
 use kube::api::ObjectMeta;
 
 // --- 1. Abstract Syntax Tree (AST) ---
@@ -18,6 +18,7 @@ pub enum AstTaskSpec {
 #[derive(Debug, Clone)]
 pub struct AstTask {
     name: String,
+    depends_on: Option<Vec<String>>,
     spec: AstTaskSpec,
 }
 
@@ -44,42 +45,51 @@ fn workflow_parser() -> impl Parser<char, AstWorkflow, Error = Simple<char>> {
         Image(String),
         Circuit(PathBuf),
         Params(PathBuf),
+        DependsOn(Vec<String>),
     }
 
-    let image_field = just("image:").ignore_then(string_literal.clone()).map(Field::Image);
-    let circuit_field = just("circuit_from:").ignore_then(string_literal.clone().map(PathBuf::from)).map(Field::Circuit);
-    let params_field = just("params_from:").ignore_then(string_literal.clone().map(PathBuf::from)).map(Field::Params);
+    let image_field = just("image:").padded().ignore_then(string_literal.clone()).map(Field::Image);
+    let circuit_field = just("circuit_from:").padded().ignore_then(string_literal.clone().map(PathBuf::from)).map(Field::Circuit);
+    let params_field = just("params_from:").padded().ignore_then(string_literal.clone().map(PathBuf::from)).map(Field::Params);
+    let depends_on_field = just("depends_on:").padded()
+        .ignore_then(string_literal.clone().separated_by(just(',')).delimited_by(just('['), just(']')))
+        .map(Field::DependsOn);
 
-    let field = choice((image_field, circuit_field, params_field))
+    let field = choice((image_field, circuit_field, params_field, depends_on_field))
         .then_ignore(just(',').or_not().padded());
 
     let task_body = field.repeated()
         .padded().delimited_by(just('{'), just('}'))
-        .try_map(|fields, span| {
+        .map_with_span(|fields, span| (fields, span))
+        .try_map(|(fields, span), _| {
             let mut image = None;
             let mut circuit = None;
             let mut params = None;
+            let mut depends_on = None;
 
             for field in fields {
                 match field {
                     Field::Image(s) => image = Some(s),
                     Field::Circuit(p) => circuit = Some(p),
                     Field::Params(p) => params = Some(p),
+                    Field::DependsOn(d) => depends_on = Some(d),
                 }
             }
 
-            if let (Some(image), Some(circuit_from), Some(params_from)) = (image.clone(), circuit, params) {
+            let spec = if let (Some(image), Some(circuit_from), Some(params_from)) = (image.clone(), circuit, params) {
                 Ok(AstTaskSpec::Quantum { image, circuit_from, params_from })
             } else if let Some(image) = image {
                 Ok(AstTaskSpec::Classical { image })
             } else {
                 Err(Simple::custom(span, "A task must have at least an 'image' field."))
-            }
+            }?;
+
+            Ok((spec, depends_on))
         });
 
     let task = just("task").padded().ignore_then(ident.clone())
         .then(task_body)
-        .map(|(name, spec)| AstTask { name, spec })
+        .map(|(name, (spec, depends_on))| AstTask { name, spec, depends_on })
         .padded();
 
     let workflow = just("workflow").padded().ignore_then(ident)
@@ -93,7 +103,6 @@ fn workflow_parser() -> impl Parser<char, AstWorkflow, Error = Simple<char>> {
 fn compile(ast: AstWorkflow) -> Result<QuantumWorkflow> {
     let tasks = ast.tasks.into_iter()
         .map(|task| -> Result<QFlowTask> {
-            // FIX: Match on the AST spec and create the corresponding QFlowTaskSpec.
             let spec = match task.spec {
                 AstTaskSpec::Classical { image } => QFlowTaskSpec::Classical { image },
                 AstTaskSpec::Quantum { image, circuit_from, params_from } => {
@@ -104,14 +113,13 @@ fn compile(ast: AstWorkflow) -> Result<QuantumWorkflow> {
                     QFlowTaskSpec::Quantum { image, circuit, params }
                 }
             };
-            // FIX: Construct the renamed QFlowTask struct. This should now compile correctly.
-            Ok(QFlowTask { name: task.name, spec })
+            Ok(QFlowTask { name: task.name, spec, depends_on: task.depends_on })
         })
         .collect::<Result<Vec<_>>>()?;
 
     Ok(QuantumWorkflow {
         metadata: ObjectMeta { name: Some(ast.name), ..Default::default() },
-        spec: QuantumWorkflowSpec { tasks },
+        spec: QuantumWorkflowSpec { tasks, volume: Some(VolumeSpec { size: "1Gi".to_string() }) }, // Add default volume
         status: None,
     })
 }
@@ -123,8 +131,8 @@ struct Args { #[arg(short, long)] file: Option<String> }
 fn main() -> Result<()> {
     let args = Args::parse();
     let mut src = String::new();
-    let path = "./qflowc/examples/quantum_test.qflow";
-    // if let Some(path) = args.file { src = std::fs::read_to_string(path)?; } else { std::io::stdin().read_to_string(&mut src)?; };
+    // let path = args.file.unwrap_or_else(|| "./qflowc/examples/quantum_test.qflow".to_string());
+    let path = args.file.unwrap_or_else(|| "./qflow-operator/tests/dag-test.qflow".to_string());
     src = std::fs::read_to_string(path)?;
 
     let ast = workflow_parser().parse(src).map_err(|e| anyhow!("Parser errors: {:?}", e))?;

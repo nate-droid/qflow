@@ -1,0 +1,10 @@
+workflow my-dag-workflow {
+    task task-a {
+        image: "docker.io/library/qflow-task-a:v0.1",
+    }
+
+    task task-b {
+        image: "docker.io/library/qflow-task-b:v0.1",
+        depends_on: ["task-a"],
+    }
+}

@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use kube::CustomResource;
 use serde::{Deserialize, Serialize};
 use schemars::JsonSchema;
@@ -10,13 +11,22 @@ use schemars::JsonSchema;
 #[kube(group = "qflow.io", version = "v1alpha1", kind = "QuantumWorkflow", namespaced, status = "QuantumWorkflowStatus")]
 #[serde(rename_all = "camelCase")]
 pub struct QuantumWorkflowSpec {
+    pub volume: Option<VolumeSpec>,
     pub tasks: Vec<QFlowTask>,
+}
+
+#[derive(Deserialize, Serialize, Clone, Debug, JsonSchema)]
+pub struct VolumeSpec {
+    pub size: String,
 }
 
 /// Represents a single task in the workflow.
 #[derive(Deserialize, Serialize, Clone, Debug, Default, JsonSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct QFlowTask {
     pub name: String,
+    #[serde(rename = "dependsOn")]
+    pub depends_on: Option<Vec<String>>,
     #[serde(flatten)]
     pub spec: QFlowTaskSpec,
 }
@@ -47,6 +57,7 @@ impl Default for QFlowTaskSpec {
 #[serde(rename_all = "camelCase")]
 pub struct QuantumWorkflowStatus {
     pub phase: Option<String>,
+    pub task_statuses: Option<BTreeMap<String, String>>,
 }
 
 #[derive(Serialize, Debug)]
