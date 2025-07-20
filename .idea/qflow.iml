@@ -7,6 +7,8 @@
       <sourceFolder url="file://$MODULE_DIR$/qflowc/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/qflowc/examples" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/qflow-backend/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/qflow-operator/tests" isTestSource="true" />
       <excludeFolder url="file://$MODULE_DIR$/qflowc/target" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>

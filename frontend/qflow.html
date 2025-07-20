@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-gray-900">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live QuantumWorkflow Visualizer</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.28.1/cytoscape.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dagre/0.8.5/dagre.min.js"></script>
+    <script src="https://unpkg.com/cytoscape-dagre@2.5.0/cytoscape-dagre.js"></script>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            color: #e5e7eb;
+        }
+        .font-code {
+            font-family: 'Fira Code', monospace;
+        }
+        #cy {
+            height: 100%;
+            width: 100%;
+        }
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #1f2937; }
+        ::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #6b7280; }
+        .status-dot {
+            height: 8px;
+            width: 8px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+        }
+        .status-loading { background-color: #f59e0b; } /* amber-500 */
+        .status-success { background-color: #22c55e; } /* green-500 */
+        .status-error { background-color: #ef4444; }   /* red-500 */
+
+        #error-modal-overlay {
+            position: fixed;
+            inset: 0;
+            background-color: rgba(0, 0, 0, 0.7);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+        }
+        #error-modal-content {
+            background-color: #1f2937;
+            color: #d1d5db;
+            padding: 2rem;
+            border-radius: 0.5rem;
+            border: 1px solid #4b5563;
+            width: 90%;
+            max-width: 800px;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        #error-modal-content h2 {
+            color: #fca5a5;
+            font-size: 1.5rem;
+            font-weight: bold;
+            margin-bottom: 1rem;
+        }
+        #error-modal-content pre {
+            background-color: #111827;
+            padding: 1rem;
+            border-radius: 0.25rem;
+            font-size: 0.875rem;
+            overflow-x: auto;
+        }
+        #error-modal-content code {
+            color: #93c5fd;
+        }
+        #error-modal-content p {
+            margin-bottom: 1rem;
+        }
+        #error-modal-content strong {
+            color: white;
+            font-weight: 600;
+        }
+        .input-group {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+        .input-group input {
+            background-color: #374151;
+            border: 1px solid #4b5563;
+            color: white;
+            border-radius: 0.375rem;
+            padding: 0.5rem 0.75rem;
+            width: 100%;
+        }
+        .fetch-button {
+            background-color: #4f46e5;
+            color: white;
+            font-weight: 600;
+            padding: 0.5rem 1rem;
+            border-radius: 0.375rem;
+            width: 100%;
+            text-align: center;
+        }
+        .fetch-button:hover {
+            background-color: #4338ca;
+        }
+    </style>
+</head>
+<body class="h-full antialiased">
+<div class="flex flex-col h-screen">
+    <!-- Header -->
+    <header class="bg-gray-800/50 backdrop-blur-sm border-b border-gray-700 p-4 shadow-lg z-20 flex justify-between items-center">
+        <div>
+            <h1 class="text-xl font-bold text-white">QuantumWorkflow Visualizer</h1>
+            <p class="text-sm text-gray-400">Status: <span class="font-semibold text-cyan-400" id="workflow-name">Idle</span></p>
+        </div>
+        <div id="connection-status" class="text-sm flex items-center">
+            <span id="status-dot" class="status-dot status-loading"></span>
+            <span id="status-text">Awaiting Input</span>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex overflow-hidden">
+        <div id="cy-container" class="flex-1 relative">
+            <div id="cy"></div>
+            <div id="graph-overlay" class="absolute inset-0 bg-gray-900/80 flex items-center justify-center z-30">
+                <div class="w-full max-w-md p-4">
+                    <h2 class="text-2xl font-bold text-center text-white mb-4">Fetch a Workflow</h2>
+                    <div class="input-group">
+                        <input type="text" id="workflow-input" placeholder="Workflow Name" value="teleportation-protocol-workflow">
+                        <input type="text" id="namespace-input" placeholder="Namespace" value="default">
+                    </div>
+                    <button id="fetch-button" class="fetch-button">Fetch Workflow</button>
+                </div>
+            </div>
+        </div>
+        <aside id="details-panel" class="w-full md:w-1/3 lg:w-1/4 bg-gray-800/80 backdrop-blur-sm border-l border-gray-700 flex flex-col">
+            <div class="p-6 overflow-y-auto flex-1">
+                <h2 id="details-title" class="text-lg font-bold text-white mb-4">Select a Task</h2>
+                <p id="details-placeholder" class="text-gray-400">Fetch a workflow to begin.</p>
+                <div id="details-data" class="hidden space-y-6">
+                    <div>
+                        <!-- FIX: Added an ID to this heading to make it dynamic -->
+                        <h3 id="details-circuit-title" class="text-sm font-semibold text-gray-400 mb-2">Task Details</h3>
+                        <pre class="bg-gray-900 rounded-lg p-4 text-sm font-code text-cyan-300 overflow-x-auto"><code id="details-circuit"></code></pre>
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-semibold text-gray-400 mb-2">Parameters</h3>
+                        <pre class="bg-gray-900 rounded-lg p-4 text-sm font-code text-yellow-300 overflow-x-auto"><code id="details-params"></code></pre>
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-semibold text-gray-400 mb-2">Image</h3>
+                        <p id="details-image" class="bg-gray-900 rounded-lg p-4 text-sm font-code text-purple-300"></p>
+                    </div>
+                </div>
+            </div>
+        </aside>
+    </main>
+</div>
+
+<!-- Error Modal -->
+<div id="error-modal-overlay">
+    <div id="error-modal-content">
+        <!-- Content will be injected by JavaScript -->
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const statusDot = document.getElementById('status-dot');
+        const statusText = document.getElementById('status-text');
+        const graphOverlay = document.getElementById('graph-overlay');
+        const errorModalOverlay = document.getElementById('error-modal-overlay');
+        const errorModalContent = document.getElementById('error-modal-content');
+        const fetchButton = document.getElementById('fetch-button');
+        const workflowInput = document.getElementById('workflow-input');
+        const namespaceInput = document.getElementById('namespace-input');
+        const workflowNameDisplay = document.getElementById('workflow-name');
+
+        function showErrorModal(title, content) {
+            errorModalContent.innerHTML = `<h2>${title}</h2>${content}`;
+            errorModalOverlay.style.display = 'flex';
+        }
+
+        errorModalOverlay.addEventListener('click', () => {
+            errorModalOverlay.style.display = 'none';
+        });
+
+        function show404ErrorModal(name, namespace) {
+            const content = `
+                    <p>The backend successfully responded, but it could not find a QuantumWorkflow named <strong>"${name}"</strong> in the <strong>"${namespace}"</strong> namespace.</p>
+                    <p><strong>Common Causes:</strong></p>
+                    <ul class="list-disc list-inside mb-4">
+                        <li>A typo in the workflow name or namespace.</li>
+                        <li>The workflow resource has not been applied to your Kubernetes cluster.</li>
+                        <li>Your Axum backend is not yet configured to accept a namespace parameter.</li>
+                    </ul>
+                    <hr class="my-4 border-gray-600">
+                    <h3>Required Backend Fix: Handle Namespaces</h3>
+                    <p>To fix this, your Axum server needs to read the namespace from the URL's query string. Replace your <strong>entire <code>src/main.rs</code></strong> with this code:</p>
+                    <pre><code class="language-rust">// Add this struct to handle query parameters
+use serde::Deserialize;
+#[derive(Deserialize)]
+pub struct FetchParams {
+    #[serde(default = "default_namespace")]
+    pub namespace: String,
+}
+fn default_namespace() -> String {
+    "default".to_string()
+}
+
+// Your main.rs should look like this:
+mod crd;
+
+use axum::{
+    extract::{Path, Query, State}, // <-- Add Query
+    routing::get,
+    Json, Router,
+};
+use crd::QuantumWorkflow;
+use kube::{Api, Client};
+use serde::Deserialize; // <-- Add Deserialize
+use std::sync::Arc;
+use tower_http::cors::{Any, CorsLayer};
+
+// ... (AppState struct remains the same) ...
+struct AppState { client: Client }
+
+// ... (FetchParams struct and default_namespace function as above) ...
+
+#[tokio::main]
+async fn main() {
+    // ... (main function remains the same, ensure CORS layer is present) ...
+    let client = Client::try_default().await.expect("Failed to create K8s client");
+    let cors = CorsLayer::new().allow_origin(Any).allow_methods(Any).allow_headers(Any);
+    let app_state = Arc::new(AppState { client });
+    let app = Router::new()
+        .route("/api/workflows/{name}", get(fetch_workflow))
+        .with_state(app_state)
+        .layer(cors);
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
+    println!("Listening on http://0.0.0.0:3000 with CORS enabled.");
+    axum::serve(listener, app).await.unwrap();
+}
+
+// Modify the handler to accept Query<FetchParams>
+async fn fetch_workflow(
+    Query(params): Query<FetchParams>, // <-- Get query params
+    State(state): State<Arc<AppState>>,
+    Path(name): Path<String>,
+) -> Result<Json<QuantumWorkflow>, axum::http::StatusCode> {
+    // Use the provided namespace
+    let api: Api<QuantumWorkflow> = Api::namespaced(state.client.clone(), &params.namespace);
+
+    match api.get(&name).await {
+        Ok(workflow) => Ok(Json(workflow)),
+        Err(e) => {
+            eprintln!("Error in namespace '{}' for workflow '{}': {}", &params.namespace, name, e);
+            Err(axum::http::StatusCode::NOT_FOUND)
+        }
+    }
+}
+</code></pre>
+                `;
+            showErrorModal(`Workflow Not Found (404)`, content);
+        }
+
+        function parseQuantumWorkflow(workflow) {
+            const elements = [];
+            const tasks = workflow.spec.tasks;
+            if (!tasks) return elements;
+            tasks.forEach(task => {
+                elements.push({
+                    group: 'nodes',
+                    data: { id: task.name, label: task.name, ...task }
+                });
+                if (task.dependsOn && Array.isArray(task.dependsOn)) {
+                    task.dependsOn.forEach(dependency => {
+                        elements.push({
+                            group: 'edges',
+                            data: { id: `${dependency}->${task.name}`, source: dependency, target: task.name }
+                        });
+                    });
+                }
+            });
+            return elements;
+        }
+
+        const cy = cytoscape({
+            container: document.getElementById('cy'),
+            style: [
+                { selector: 'node', style: { 'background-color': '#1f2937', 'border-color': '#38bdf8', 'border-width': 2, 'label': 'data(label)', 'color': '#e5e7eb', 'font-size': '12px', 'text-valign': 'center', 'text-halign': 'center', 'width': '140px', 'height': '50px', 'shape': 'round-rectangle', 'transition-property': 'background-color, border-color', 'transition-duration': '0.2s' } },
+                { selector: 'edge', style: { 'width': 2, 'line-color': '#6b7280', 'target-arrow-color': '#6b7280', 'target-arrow-shape': 'triangle', 'curve-style': 'bezier' } },
+                { selector: 'node:selected', style: { 'background-color': '#0ea5e9', 'border-color': '#f0f9ff' } }
+            ],
+            layout: { name: 'dagre' }
+        });
+
+        async function handleFetch() {
+            const workflowName = workflowInput.value.trim();
+            const namespace = namespaceInput.value.trim();
+
+            if (!workflowName || !namespace) {
+                alert("Please provide both a workflow name and a namespace.");
+                return;
+            }
+
+            const apiUrl = `http://localhost:3000/api/workflows/${workflowName}?namespace=${namespace}`;
+
+            statusDot.className = 'status-dot status-loading';
+            statusText.textContent = 'Connecting...';
+            graphOverlay.style.display = 'flex'; // Show loading overlay
+
+            try {
+                const response = await fetch(apiUrl);
+                if (response.status === 404) {
+                    throw new Error(`404 Not Found`);
+                }
+                if (!response.ok) {
+                    throw new Error(`Server responded with ${response.status}: ${response.statusText}`);
+                }
+                const workflowData = await response.json();
+
+                statusDot.className = 'status-dot status-success';
+                statusText.textContent = 'Connected';
+                graphOverlay.style.display = 'none';
+                workflowNameDisplay.textContent = `${workflowData.metadata.name} (in ${namespace})`;
+
+                const graphElements = parseQuantumWorkflow(workflowData);
+                cy.elements().remove();
+                cy.add(graphElements);
+                cy.layout({ name: 'dagre', nodeSep: 60, rankSep: 80, spacingFactor: 1.2, rankDir: 'TB' }).run();
+                cy.fit(30);
+
+            } catch (error) {
+                console.error("Failed to fetch workflow:", error);
+                statusDot.className = 'status-dot status-error';
+                statusText.textContent = 'Connection Failed';
+
+                if (error.message.includes('404')) {
+                    show404ErrorModal(workflowName, namespace);
+                } else if (error instanceof TypeError && error.message === 'Failed to fetch') {
+                    showErrorModal('Backend Configuration Required (CORS Error)', '<p>Please see previous instructions on how to configure your Axum server for CORS.</p>');
+                } else {
+                    showErrorModal('An Unexpected Error Occurred', `<p>${error.message}</p>`);
+                }
+            }
+        }
+
+        fetchButton.addEventListener('click', handleFetch);
+
+        const detailsPanel = document.getElementById('details-panel');
+        const detailsPlaceholder = document.getElementById('details-placeholder');
+        const detailsData = document.getElementById('details-data');
+        const detailsTitle = document.getElementById('details-title');
+
+        // FIX: This handler now correctly displays details for both quantum and classical tasks.
+        cy.on('tap', 'node', function(evt){
+            const taskData = evt.target.data();
+
+            const circuitTitleEl = document.getElementById('details-circuit-title');
+            const circuitCodeEl = document.getElementById('details-circuit');
+            const paramsCodeEl = document.getElementById('details-params');
+            const imageEl = document.getElementById('details-image');
+
+            detailsPlaceholder.classList.add('hidden');
+            detailsData.classList.remove('hidden');
+            detailsTitle.textContent = taskData.id || "Unnamed Task";
+
+            if (taskData && taskData.quantum) {
+                // Handle Quantum Task
+                circuitTitleEl.textContent = "Quantum Circuit (OpenQASM)";
+                circuitCodeEl.textContent = taskData.quantum.circuit || "N/A";
+                paramsCodeEl.textContent = taskData.quantum.params || "N/A";
+                imageEl.textContent = taskData.quantum.image || "N/A";
+
+            } else if (taskData && taskData.classical) {
+                // Handle Classical Task
+                circuitTitleEl.textContent = "Classical Task Details";
+                circuitCodeEl.textContent = "This is a classical task and has no quantum circuit.";
+                paramsCodeEl.textContent = taskData.classical.params ? JSON.stringify(taskData.classical.params, null, 2) : "No parameters specified.";
+                imageEl.textContent = taskData.classical.image || "N/A";
+
+            } else {
+                // Handle unknown task type
+                console.error("Clicked node is missing 'quantum' or 'classical' data:", taskData);
+                circuitTitleEl.textContent = "Unknown Task Type";
+                circuitCodeEl.textContent = "The data for this task could not be displayed.";
+                paramsCodeEl.textContent = "N/A";
+                imageEl.textContent = "N/A";
+            }
+        });
+
+        cy.on('tap', function(evt){
+            if(evt.target === cy){
+                detailsTitle.textContent = 'Select a Task';
+                detailsPlaceholder.classList.remove('hidden');
+                detailsData.classList.add('hidden');
+                cy.elements().unselect();
+            }
+        });
+    });
+</script>
+</body>
+</html>

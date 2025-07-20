@@ -41,6 +41,7 @@ const TASK_PENDING: &str = "Pending";
 const TASK_RUNNING: &str = "Running";
 const TASK_SUCCEEDED: &str = "Succeeded";
 const TASK_FAILED: &str = "Failed";
+const QFLOW_TASK_NAME_LABEL: &str = "qflow.io/task-name";
 
 async fn create_pvc_if_not_exists(client: &Client, wf: &QuantumWorkflow) -> Result<(), Error> {
     let ns = wf.metadata.namespace.clone().ok_or(Error::MissingObjectKey("namespace"))?;
@@ -99,7 +100,7 @@ fn create_job_for_task(wf: &QuantumWorkflow, task: &QFlowTask, cm_name: Option<S
     }];
     let mut volume_mounts = vec![VolumeMount {
         name: "qflow-workspace".to_string(),
-        mount_path: "/workspace".to_string(), // Mount entire workspace
+        mount_path: "/workspace".to_string(),
         ..Default::default()
     }];
 
@@ -117,6 +118,7 @@ fn create_job_for_task(wf: &QuantumWorkflow, task: &QFlowTask, cm_name: Option<S
         metadata: ObjectMeta {
             name: Some(job_name),
             owner_references: Some(vec![wf.controller_owner_ref(&()).unwrap()]),
+            labels: Some([ (QFLOW_TASK_NAME_LABEL.to_string(), task.name.clone()) ].into()),
             ..Default::default()
         },
         spec: Some(JobSpec {
@@ -166,6 +168,29 @@ async fn reconcile(wf: Arc<QuantumWorkflow>, ctx: Arc<Context>) -> Result<Action
         let status = QuantumWorkflowStatus { phase: Some(TASK_PENDING.to_string()), task_statuses: Some(initial_statuses) };
         update_status(&wf_api, &wf.metadata.name.clone().unwrap(), status).await?;
         return Ok(Action::requeue(Duration::from_secs(1))); // Requeue immediately to process
+    }
+
+    let mut real_task_statuses = BTreeMap::new();
+    let owned_jobs = job_api.list(&ListParams::default().labels(&format!("app.kubernetes.io/instance={}", wf.metadata.name.clone().unwrap()))).await?;
+
+    for job in owned_jobs {
+        if let Some(labels) = job.metadata.labels {
+            if let Some(task_name) = labels.get(QFLOW_TASK_NAME_LABEL) {
+                let status = if job.status.as_ref().and_then(|s| s.succeeded).unwrap_or(0) > 0 {
+                    TASK_SUCCEEDED
+                } else if job.status.as_ref().and_then(|s| s.failed).unwrap_or(0) > 0 {
+                    TASK_FAILED
+                } else {
+                    TASK_RUNNING
+                };
+                real_task_statuses.insert(task_name.clone(), status.to_string());
+            }
+        }
+    }
+
+    // Fill in any tasks from the spec that don't have a job yet
+    for task in &wf.spec.tasks {
+        real_task_statuses.entry(task.name.clone()).or_insert(TASK_PENDING.to_string());
     }
 
     // 2. Build DAG and check for cycles

@@ -1,0 +1,17 @@
+apiVersion: qflow.io/v1alpha1
+kind: QuantumWorkflow
+metadata:
+  name: teleportation-protocol-workflow
+spec:
+  volume:
+    size: 1Gi
+  tasks:
+    - name: task-a
+      dependsOn: null
+      classical:
+        image: docker.io/library/qflow-task-a:v0.1
+    - name: task-b
+      dependsOn:
+        - task-a
+      classical:
+        image: docker.io/library/qflow-task-b:v0.1

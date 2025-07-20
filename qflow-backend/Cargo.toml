@@ -1,0 +1,13 @@
+[package]
+name = "qflow-backend"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+axum = "0.8.4"
+tokio = { version = "1.46.1", features = ["full"] }
+kube = { version = "1.1.0", features = ["runtime", "derive"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+qflow-types = { path = "../qflow-types" }
+tower-http = { version = "0.6.6", features = ["cors"] } # Add this line
