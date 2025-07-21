@@ -9,6 +9,8 @@
       <sourceFolder url="file://$MODULE_DIR$/qflowc/examples" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/qflow-backend/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/qflow-operator/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/qsim/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/vqa-runner/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/qflowc/target" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
