@@ -1459,8 +1459,10 @@ name = "qflow-backend"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "k8s-openapi",
  "kube",
  "qflow-types",
+ "schemars",
  "serde",
  "serde_json",
  "tokio",

@@ -114,21 +114,32 @@ fn create_job_for_task(wf: &QuantumWorkflow, task: &QFlowTask, cm_name: Option<S
     }
 
     let job_name = format!("{}-{}", wf.metadata.name.clone().unwrap(), task.name);
+    let input_file_path = "/workspace/input/circuit.qasm"; // Example input file path
+
     Ok(Job {
         metadata: ObjectMeta {
             name: Some(job_name),
             owner_references: Some(vec![wf.controller_owner_ref(&()).unwrap()]),
-            labels: Some([ (QFLOW_TASK_NAME_LABEL.to_string(), task.name.clone()) ].into()),
+            labels: Some([(QFLOW_TASK_NAME_LABEL.to_string(), task.name.clone())].into()),
             ..Default::default()
         },
         spec: Some(JobSpec {
             template: PodTemplateSpec {
                 spec: Some(PodSpec {
-                    containers: vec![Container { name: "task-runner".to_string(), image: Some(image), volume_mounts: Some(volume_mounts), ..Default::default() }],
+                    containers: vec![Container {
+                        name: "task-runner".to_string(),
+                        image: Some(image),
+                        command: Some(vec!["/qsim".to_string()]), // Replace with the actual executable
+                        args: Some(vec!["--input-file".to_string(), input_file_path.to_string()]),
+                        volume_mounts: Some(volume_mounts),
+                        image_pull_policy: Some("Never".to_string()),
+                        ..Default::default()
+                    }],
                     volumes: Some(volumes),
                     restart_policy: Some("Never".to_string()),
                     ..Default::default()
-                }), ..Default::default()
+                }),
+                ..Default::default()
             },
             backoff_limit: Some(4),
             ..Default::default()
