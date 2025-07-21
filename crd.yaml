@@ -62,6 +62,35 @@ spec:
                           params:
                             type: string
                             description: "The full parameters JSON as a string."
+                      vqa:
+                        type: object
+                        description: "A variational quantum algorithm task that runs a hybrid quantum-classical loop."
+                        required: [ "image", "ansatz" ]
+                        properties:
+                          image:
+                            type: string
+                            description: "Container image with libraries (e.g., Qiskit, PennyLane) and the script to run the VQA loop."
+                          ansatz:
+                            type: string
+                            description: "The parameterized quantum circuit (e.g., templated OpenQASM) as a string."
+                          optimizer:
+                            type: object
+                            description: "Configuration for the classical optimizer."
+                            required: [ "name" ]
+                            properties:
+                              name:
+                                type: string
+                                description: "The name of the optimizer to use (e.g., 'SPSA', 'COBYLA')."
+                              maxIterations:
+                                type: integer
+                                description: "The maximum number of optimization iterations."
+                              initialParams:
+                                type: string
+                                description: "The initial parameters for the ansatz as a JSON string."
+                          shots:
+                            type: integer
+                            default: 1024
+                            description: "Number of shots for each quantum measurement."
             status:
               type: object
               description: "Reports the observed state of the QuantumWorkflow."
