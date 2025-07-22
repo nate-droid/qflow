@@ -15,9 +15,6 @@ use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, sync::Arc};
 use tower_http::cors::{Any, CorsLayer};
 
-// --- Structs for the JSON response sent to the frontend ---
-// These are designed to mimic the structure of a CRD so the frontend
-// doesn't need to change how it processes data.
 
 #[derive(Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -55,9 +52,6 @@ struct Status {
     task_status: HashMap<String, String>,
 }
 
-
-// --- Application State and Main Setup ---
-
 struct AppState {
     client: Client,
 }
@@ -85,16 +79,6 @@ async fn main() {
 }
 
 
-/// **REWORKED: Fetches all Kubernetes Jobs with a specific label to construct a workflow.**
-///
-/// This handler no longer looks for a `QuantumWorkflow` CRD. Instead, it synthesizes
-/// the workflow by inspecting `Job` resources directly.
-///
-/// It makes the following assumptions about your Jobs:
-/// - **Workflow Label:** `quantum.workflow/name: <workflow_name>` (used for lookup)
-/// - **Task Name Label:** `quantum.workflow/task-name: <task_name>`
-/// - **Dependencies Annotation:** `quantum.workflow/dependsOn: "task-a,task-b"`
-/// - **Data Annotations:** `quantum.workflow/circuit`, `quantum.workflow/params`, etc.
 async fn fetch_workflow_from_jobs(
     State(state): State<Arc<AppState>>,
     Path(workflow_name): Path<String>,
@@ -126,11 +110,6 @@ async fn fetch_workflow_from_jobs(
         return Err(StatusCode::NOT_FOUND);
     }
 
-    // if job_list.items.is_empty() {
-    //     eprintln!("No jobs found for workflow '{}' in namespace '{}' with label selector '{}'", workflow_name, params.namespace, label_selector);
-    //     return Err(StatusCode::NOT_FOUND);
-    // }
-
     let mut tasks = Vec::new();
     let mut task_status_map = HashMap::new();
 
@@ -141,8 +120,7 @@ async fn fetch_workflow_from_jobs(
         // Prefer the explicit task-name label, but fall back to the job's full name.
         let task_name = labels.and_then(|l| l.get("quantum.workflow/task-name").cloned())
             .unwrap_or_else(|| job.metadata.name.clone().unwrap_or_default());
-
-        // --- Extract Task Spec ---
+        
         let depends_on = annotations
             .and_then(|a| a.get("quantum.workflow/dependsOn"))
             .map(|s| s.split(',').map(String::from).collect())
@@ -171,7 +149,7 @@ async fn fetch_workflow_from_jobs(
             classical,
         });
 
-        // --- Determine Task Status ---
+        // get task status
         let status_str = match job.status {
             Some(s) if s.succeeded.map_or(false, |c| c > 0) => "Succeeded".to_string(),
             Some(s) if s.clone().failed.map_or(false, |c| c > 0) => "Failed".to_string(),
@@ -189,71 +167,11 @@ async fn fetch_workflow_from_jobs(
         spec: Spec { tasks },
         status: Status { task_status: task_status_map },
     };
-
-
-    // for job in job_list.items {
-    //     let annotations = job.metadata.annotations.as_ref();
-    //     let labels = job.metadata.labels.as_ref();
-    //
-    //     let task_name = labels.and_then(|l| l.get("quantum.workflow/task-name").cloned())
-    //         .unwrap_or_else(|| job.metadata.name.clone().unwrap_or_default());
-    //
-    //     // --- Extract Task Spec ---
-    //     let depends_on = annotations
-    //         .and_then(|a| a.get("quantum.workflow/dependsOn"))
-    //         .map(|s| s.split(',').map(String::from).collect())
-    //         .unwrap_or_default();
-    //
-    //     // A simple way to get task details is from annotations.
-    //     // A better long-term solution is mounting a ConfigMap to the Job.
-    //     let circuit = annotations.and_then(|a| a.get("quantum.workflow/circuit").cloned());
-    //     let task_params = annotations.and_then(|a| a.get("quantum.workflow/params").cloned());
-    //
-    //     let (quantum, classical) = if circuit.is_some() {
-    //         let q_params: serde_json::Value = serde_json::from_str(&task_params.unwrap_or_else(|| "{}".to_string())).unwrap_or(serde_json::Value::Null);
-    //         (Some(serde_json::json!({
-    //             "circuit": circuit,
-    //             "params": q_params,
-    //         })), None)
-    //     } else {
-    //         (None, Some(serde_json::json!({
-    //             "command": "See Job Spec",
-    //              "params": task_params,
-    //         })))
-    //     };
-    //
-    //     tasks.push(Task {
-    //         name: task_name.clone(),
-    //         depends_on,
-    //         quantum,
-    //         classical,
-    //     });
-    //
-    //     // --- Determine Task Status ---
-    //     let status_str = match job.status {
-    //         Some(s) if s.succeeded.map_or(false, |c| c > 0) => "Succeeded".to_string(),
-    //         Some(s) if s.clone().failed.map_or(false, |c| c > 0) => "Failed".to_string(),
-    //         Some(s) if s.clone().active.map_or(false, |c| c > 0) => "Running".to_string(),
-    //         _ => "Pending".to_string(),
-    //     };
-    //     task_status_map.insert(task_name, status_str);
-    // }
-    //
-    // let workflow = SyntheticWorkflow {
-    //     metadata: Metadata {
-    //         name: workflow_name,
-    //         namespace: params.namespace,
-    //     },
-    //     spec: Spec { tasks },
-    //     status: Status { task_status: task_status_map },
-    // };
-
+    
     Ok(Json(workflow))
 }
 
 
-/// Axum handler to fetch the results (logs) of a specific task pod.
-/// This handler remains largely the same as it already works by finding pods via labels.
 async fn fetch_task_results(
     State(state): State<Arc<AppState>>,
     Path((namespace, workflow_name, task_name)): Path<(String, String, String)>,

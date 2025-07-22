@@ -1,3 +1,5 @@
+use std::convert::Into;
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Gate {
     H(usize),
@@ -5,13 +7,22 @@ pub enum Gate {
     Y(usize),
     Z(usize),
     CX(usize, usize),
-    RX(usize, f64), // RX gate with angle
-    RY(usize, f64), // RY gate with angle
-    RZ(usize, f64), // RZ gate with angle
+    RX(usize, f64), // target and theta
+    RY(usize, f64), // target and theta
+    RZ(usize, f64), // target and theta
     Measure,
 }
 
-/// A very simple OpenQASM parser.
+impl Gate {
+    pub fn target(&self) -> Vec<usize> {
+        match self {
+            Gate::H(target) | Gate::X(target) | Gate::Y(target) | Gate::Z(target) | Gate::RX(target, ..) | Gate::RY(target, ..) | Gate::RZ(target, ..) => vec![*target],
+            Gate::CX(_, target) => vec![*target],
+            _ => vec![],
+        }
+    }
+}
+
 pub fn parse_qasm(qasm_str: &str) -> (usize, Vec<Gate>) {
     let mut num_qubits = 0;
     let mut gates = Vec::new();
@@ -83,9 +94,7 @@ pub fn parse_qasm(qasm_str: &str) -> (usize, Vec<Gate>) {
                 }
             }
         }
-        // Since our simulator only supports one "measure all" operation,
-        // we'll treat the first measure instruction we see as the trigger
-        // and ignore any subsequent ones.
+
         else if trimmed_line.starts_with("measure") {
             if !has_measured {
                 gates.push(Gate::Measure);

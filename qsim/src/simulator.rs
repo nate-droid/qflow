@@ -2,8 +2,7 @@ use super::parser::{Gate, parse_qasm};
 use super::state::StateVector;
 use num_complex::Complex;
 use std::f64::consts::FRAC_1_SQRT_2;
-use std::io::Write;
-
+use crate::circuit::Circuit;
 use crate::events::{Event, GateInfo, MeasurementInfo, SimulationStartInfo, emit_event};
 
 pub trait QuantumGate {
@@ -23,10 +22,14 @@ impl QuantumSimulator {
         }
     }
 
-    /// Resets the simulator back to the |00...0> state.
-    /// This is crucial for running the VQA loop multiple times.
     pub fn reset(&mut self) {
         self.state.reset();
+    }
+
+    pub fn apply_circuit(&mut self, circuit: &Circuit) {
+        for gate in &circuit.gates {
+            self.apply_gate(gate);
+        }
     }
 
     pub fn apply_gate(&mut self, gate: &Gate) {
@@ -40,8 +43,18 @@ impl QuantumSimulator {
                 let result = self.state.measure_all(&mut rand::thread_rng());
             }
             _ => {
-                eprintln!("Unsupported gate: {:?}", gate);
-                panic!("Unsupported gate type encountered during simulation.");
+                let matrix = construct_gate_matrix(gate);
+                
+                if let Some(matrix) = matrix {
+                    if gate.target().len() == 1 {
+                        self.state.apply_single_qubit_gate(&matrix, gate.target()[0]);
+                    } else {
+                        self.state.apply_multi_qubit_gate(&matrix, &gate.target());
+                    }
+                } else {
+                    eprintln!("Unsupported gate type: {:?}", gate);
+                    panic!("Unsupported gate type encountered during simulation.");
+                }
             }
         }
     }
@@ -86,34 +99,40 @@ pub const PAULI_Z: GateMatrix = [
     [Complex::new(0.0, 0.0), Complex::new(-1.0, 0.0)],
 ];
 
-pub fn construct_gate_matrix(gate_type: &str, params: Option<Vec<f64>>) -> Option<GateMatrix> {
-    match gate_type {
-        "H" => Some(HADAMARD),
-        "X" => Some(PAULI_X),
-        "Y" => Some(PAULI_Y),
-        "Z" => Some(PAULI_Z),
-        "RX" => {
-            if let Some(p) = params {
-                let theta = p[0];
-                Some([
-                    [
-                        Complex::new((theta / 2.0).cos(), 0.0),
-                        Complex::new(0.0, -(theta / 2.0).sin()),
-                    ],
-                    [
-                        Complex::new(0.0, -(theta / 2.0).sin()),
-                        Complex::new((theta / 2.0).cos(), 0.0),
-                    ],
-                ])
-            } else {
-                None
-            }
+pub fn construct_gate_matrix(gate: &Gate) -> Option<GateMatrix> {
+    match gate {
+        Gate::RX(qubit, theta) => {
+            Some([
+                [
+                    Complex::new((theta / 2.0).cos(), 0.0),
+                    Complex::new(0.0, -(theta / 2.0).sin()),
+                ],
+                [
+                    Complex::new(0.0, -(theta / 2.0).sin()),
+                    Complex::new((theta / 2.0).cos(), 0.0),
+                ],
+            ])
         }
-        _ => None, // Unsupported gate type
+        Gate::RY(qubit, theta) => {
+            Some([
+                [
+                    Complex::new((theta / 2.0).cos(), 0.0),
+                    Complex::new(0.0, -(theta / 2.0).sin()),
+                ],
+                [
+                    Complex::new(0.0, (theta / 2.0).sin()),
+                    Complex::new((theta / 2.0).cos(), 0.0),
+                ],
+            ])
+
+        }
+        _ => {
+            eprintln!("Unsupported gate type: {:?}", gate);
+            panic!("Unsupported gate type encountered during simulation.");
+        }, // Unsupported gate type
     }
 }
 
-/// Main simulation runner.
 pub fn run_simulation(qasm_input: &str) -> Option<Vec<Event>> {
     let mut events = Vec::new();
 
@@ -141,8 +160,7 @@ pub fn run_simulation(qasm_input: &str) -> Option<Vec<Event>> {
             Gate::CX(control, target) => state.apply_cx(*control, *target),
             Gate::Measure => {
                 let result = state.measure_all(&mut rng);
-                // We clone the final state to give ownership to the event.
-                // This is necessary to avoid returning a reference to a local variable.
+
                 events.push(Event::MeasurementResult(MeasurementInfo {
                     classical_outcome: result,
                     binary_outcome: format!("{:b}", result),
@@ -155,10 +173,7 @@ pub fn run_simulation(qasm_input: &str) -> Option<Vec<Event>> {
                 panic!("Unsupported gate type encountered during simulation.");
             }
         }
-
-        // We clone the state vector here to give ownership of the data
-        // to the event. This is necessary because the `state` variable
-        // is local to this function and cannot be referenced in the return value.
+        
         events.push(Event::GateApplication(GateInfo {
             step: i + 1,
             gate: gate_str,
@@ -179,18 +194,8 @@ mod tests {
 
     #[test]
     fn test_bell_state_simulation() {
-        let hadamard = [
-            [
-                Complex::new(FRAC_1_SQRT_2, 0.0),
-                Complex::new(FRAC_1_SQRT_2, 0.0),
-            ],
-            [
-                Complex::new(FRAC_1_SQRT_2, 0.0),
-                Complex::new(-FRAC_1_SQRT_2, 0.0),
-            ],
-        ];
         let mut state = StateVector::new(2);
-        state.apply_single_qubit_gate(&hadamard, 0);
+        state.apply_single_qubit_gate(&HADAMARD, 0);
         state.apply_cx(0, 1);
         let expected_amp = Complex::new(FRAC_1_SQRT_2, 0.0);
         assert!(approx_eq(state.amplitudes[0], expected_amp));

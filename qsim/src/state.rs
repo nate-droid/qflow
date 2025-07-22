@@ -3,8 +3,6 @@ use rand::Rng;
 use rand::distributions::{Distribution, WeightedIndex};
 use serde::Serialize;
 
-/// Represents the state of an n-qubit system.
-/// The state is stored as a vector of 2^n complex amplitudes.
 #[derive(Serialize, Clone)]
 pub struct StateVector {
     pub num_qubits: usize,
@@ -13,8 +11,6 @@ pub struct StateVector {
 }
 
 impl StateVector {
-    /// Creates a new state vector for `num_qubits` qubits,
-    /// initialized to the |0...0> state.
     pub fn new(num_qubits: usize) -> Self {
         let size = 1 << num_qubits; // 2^num_qubits
         let mut amplitudes = vec![Complex::new(0.0, 0.0); size];
@@ -26,8 +22,7 @@ impl StateVector {
             amplitudes,
         }
     }
-
-    /// Applies a single-qubit gate to the specified qubit.
+    
     pub fn apply_single_qubit_gate(
         &mut self,
         gate_matrix: &[[Complex<f64>; 2]; 2],
@@ -48,8 +43,32 @@ impl StateVector {
         }
         self.amplitudes = new_amplitudes;
     }
+    
+    pub fn apply_multi_qubit_gate(
+        &mut self,
+        gate_matrix: &[[Complex<f64>; 2]; 2],
+        target_qubits: &[usize],
+    ) {
+        if target_qubits.len() != 2 {
+            panic!("Multi-qubit gates currently only support two qubits.");
+        }
+        let mut new_amplitudes = self.amplitudes.clone();
+        let k1 = 1 << target_qubits[0];
+        let k2 = 1 << target_qubits[1];
 
-    /// Applies a Controlled-X (CNOT) gate.
+        for i in 0..self.amplitudes.len() {
+            if (i & k1) == 0 && (i & k2) == 0 {
+                let j = i | k1 | k2;
+                let amp_i = self.amplitudes[i];
+                let amp_j = self.amplitudes[j];
+
+                new_amplitudes[i] = gate_matrix[0][0] * amp_i + gate_matrix[0][1] * amp_j;
+                new_amplitudes[j] = gate_matrix[1][0] * amp_i + gate_matrix[1][1] * amp_j;
+            }
+        }
+        self.amplitudes = new_amplitudes;
+    }
+    
     pub fn apply_cx(&mut self, control_qubit: usize, target_qubit: usize) {
         let mut new_amplitudes = self.amplitudes.clone();
         let control_mask = 1 << control_qubit;
@@ -63,8 +82,7 @@ impl StateVector {
         }
         self.amplitudes = new_amplitudes;
     }
-
-    /// Simulates measuring all qubits, collapsing the state vector.
+    
     pub fn measure_all(&mut self, rng: &mut impl Rng) -> usize {
         let probabilities: Vec<f64> = self.amplitudes.iter().map(|a| a.norm_sqr()).collect();
         let dist =
@@ -121,8 +139,7 @@ mod tests {
             [Complex::new(1.0, 0.0), Complex::new(0.0, 0.0)],
         ];
         let mut state = StateVector::new(2); // State is |00>
-
-        // Apply X to qubit 1 to get |10> (state 2)
+        
         state.apply_single_qubit_gate(&pauli_x, 1);
 
         let mut rng = thread_rng();

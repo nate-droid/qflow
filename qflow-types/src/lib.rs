@@ -3,10 +3,6 @@ use kube::CustomResource;
 use serde::{Deserialize, Serialize};
 use schemars::JsonSchema;
 
-/// The top-level Custom Resource for a QuantumWorkflow.
-/// This is the struct that will be serialized to/from YAML.
-
-
 #[derive(CustomResource, Serialize, Deserialize, Clone, Debug, JsonSchema)]
 #[kube(group = "qflow.io", version = "v1alpha1", kind = "QuantumWorkflow", namespaced, status = "QuantumWorkflowStatus")]
 #[serde(rename_all = "camelCase")]
@@ -20,7 +16,6 @@ pub struct VolumeSpec {
     pub size: String,
 }
 
-/// Represents a single task in the workflow.
 #[derive(Deserialize, Serialize, Clone, Debug, Default, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct QFlowTask {
@@ -39,8 +34,8 @@ pub enum QFlowTaskSpec {
     },
     Quantum {
         image: String,
-        circuit: String, // The full QASM circuit as a string
-        params: String,  // The full parameters JSON as a string
+        circuit: String,
+        params: String,
     },
 }
 
@@ -52,7 +47,6 @@ impl Default for QFlowTaskSpec {
     }
 }
 
-/// Represents the observed state of a QuantumWorkflow.
 #[derive(Deserialize, Serialize, Clone, Debug, Default, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct QuantumWorkflowStatus {

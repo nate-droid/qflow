@@ -1535,8 +1535,6 @@ dependencies = [
  "axum",
  "k8s-openapi",
  "kube",
- "qflow-types",
- "schemars",
  "serde",
  "serde_json",
  "tokio",
@@ -1571,7 +1569,6 @@ version = "0.1.0"
 dependencies = [
  "k8s-openapi",
  "kube",
- "petgraph",
  "schemars",
  "serde",
  "serde_json",
@@ -1584,10 +1581,8 @@ dependencies = [
  "anyhow",
  "chumsky",
  "clap",
- "k8s-openapi",
  "kube",
  "qflow-types",
- "serde",
  "serde_yaml",
 ]
 
@@ -1598,7 +1593,6 @@ dependencies = [
  "clap",
  "num-complex",
  "rand",
- "regex",
  "serde",
  "serde_json",
 ]

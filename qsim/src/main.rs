@@ -8,11 +8,9 @@ use std::path::PathBuf;
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Cli {
-    /// The input OpenQASM file to simulate. If not provided, reads from stdin.
     #[arg(short, long)]
     input_file: Option<PathBuf>,
 
-    /// The output file to write JSON results to. If not provided, writes to stdout.
     #[arg(short, long)]
     output_file: Option<PathBuf>,
 }

@@ -1,24 +1,21 @@
 use argmin::core::{CostFunction, Error, Executor};
 use argmin::solver::neldermead::NelderMead;
 use qsim::QuantumSimulator; // Assuming this is the name of your simulator struct
+use qsim::circuit::Circuit; // Assuming this is the circuit struct
 
-// This struct links our problem to the `argmin` optimizer.
-// It holds a mutable reference to the simulator to use it in the cost function.
 struct VqaProblem<'a> {
     simulator: &'a mut QuantumSimulator,
 }
 
-/// The objective function is the core of the VQA.
-/// It takes parameters from the classical optimizer and returns a "cost".
-/// The optimizer's goal is to find the `params` that result in the lowest cost.
 fn calculate_cost(params: &[f64], simulator: &mut QuantumSimulator) -> f64 {
-    // 1. Define the Parameterized Quantum Circuit (Ansatz)
-    // This is a simple circuit with two parameters.
-    simulator.reset(); // Start from the |00> state
-    simulator.apply_gate(&qsim::Gate::H(0));
-    simulator.apply_gate(&qsim::Gate::CX(0, 1));
-    simulator.apply_gate(&qsim::Gate::RY(0, 0.0));
-    simulator.apply_gate(&qsim::Gate::RX(0, 0.0));
+    let mut circuit = Circuit::new();
+
+    circuit.add_gate(qsim::Gate::H(0));
+    circuit.add_gate(qsim::Gate::CX(0, 1));
+    circuit.add_gate(qsim::Gate::RY(0, 0.0));
+    circuit.add_gate(qsim::Gate::RX(0, 0.0));
+
+    simulator.apply_circuit(&circuit);
 
     // 2. Define the Cost
     // Let's say our goal is to maximize the probability of measuring |11>.

@@ -23,8 +23,6 @@ use k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta;
 use qflow_types::{QFlowTask, QFlowTaskSpec};
 use qflow_types::{QuantumWorkflowSpec, QuantumWorkflowStatus, QuantumWorkflow};
 
-// --- 2. Error Handling ---
-// A custom error enum for our reconciler logic
 #[derive(Error, Debug)]
 pub enum Error {
     #[error("Kubernetes API Error: {0}")]
@@ -156,10 +154,6 @@ async fn update_status(api: &Api<QuantumWorkflow>, name: &str, status: QuantumWo
     Ok(())
 }
 
-// --- 3. The Reconciliation Logic ---
-// This is the core of the operator. It's called whenever a QuantumWorkflow
-// resource changes.
-
 async fn reconcile(wf: Arc<QuantumWorkflow>, ctx: Arc<Context>) -> Result<Action, Error> {
     // println!("reconciling {:?}", wf);
     let client = &ctx.client;
@@ -199,12 +193,12 @@ async fn reconcile(wf: Arc<QuantumWorkflow>, ctx: Arc<Context>) -> Result<Action
         }
     }
 
-    // Fill in any tasks from the spec that don't have a job yet
+    // fill in any tasks from the spec that don't have a job yet
     for task in &wf.spec.tasks {
         real_task_statuses.entry(task.name.clone()).or_insert(TASK_PENDING.to_string());
     }
 
-    // 2. Build DAG and check for cycles
+    // Dag construction
 
     //let mut graph = DiGraphMap::<&str, ()>::new();
     let mut graph = DiGraphMap::<&str, _, RandomState>::new();
@@ -230,7 +224,7 @@ async fn reconcile(wf: Arc<QuantumWorkflow>, ctx: Arc<Context>) -> Result<Action
         return Err(Error::InvalidWorkflow("Workflow has a cycle".to_string()));
     }
 
-    // 3. Process tasks based on status
+    // handle status
     let mut current_statuses = wf.status.as_ref().unwrap().task_statuses.as_ref().unwrap().clone();
     let mut made_change = false;
 
@@ -303,12 +297,10 @@ async fn reconcile(wf: Arc<QuantumWorkflow>, ctx: Arc<Context>) -> Result<Action
     Ok(Action::requeue(Duration::from_secs(15)))
 }
 
-/// The context for our reconciler.
 struct Context {
     client: Client,
 }
 
-/// A helper function for handling errors during reconciliation.
 fn on_error(wf: Arc<QuantumWorkflow>, error: &Error, _ctx: Arc<Context>) -> Action {
     warn!("Reconciliation error for '{:?}': {:?}", wf.metadata.name, error);
     println!("Reconciliation error for '{:?}': {:?} in ns: {:?}", wf.metadata.name, error, wf.metadata.namespace);
@@ -316,10 +308,8 @@ fn on_error(wf: Arc<QuantumWorkflow>, error: &Error, _ctx: Arc<Context>) -> Acti
     Action::requeue(Duration::from_secs(5))
 }
 
-// --- 4. The `main` function to run the operator ---
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // Initialize tracing (for logging)
     tracing_subscriber::fmt()
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .init();

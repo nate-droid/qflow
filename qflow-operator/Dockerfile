@@ -1,4 +1,3 @@
-# Use the official Rust image as a builder
 FROM rust:1.88 as builder
 
 RUN apt-get update && apt-get install -y musl-tools gcc-aarch64-linux-gnu
