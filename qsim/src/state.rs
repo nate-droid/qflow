@@ -80,6 +80,15 @@ impl StateVector {
         }
         measured_index
     }
+
+    pub fn reset(&mut self) {
+        for amp in &mut self.amplitudes {
+            *amp = Complex::new(0.0, 0.0);
+        }
+        if !self.amplitudes.is_empty() {
+            self.amplitudes[0] = Complex::new(1.0, 0.0);
+        }
+    }
 }
 
 #[cfg(test)]

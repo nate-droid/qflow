@@ -5,6 +5,9 @@ pub enum Gate {
     Y(usize),
     Z(usize),
     CX(usize, usize),
+    RX(usize, f64), // RX gate with angle
+    RY(usize, f64), // RY gate with angle
+    RZ(usize, f64), // RZ gate with angle
     Measure,
 }
 
