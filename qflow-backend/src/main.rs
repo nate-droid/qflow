@@ -13,7 +13,11 @@ use kube::{
 };
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, sync::Arc};
+use axum::routing::post;
+use kube::api::{DynamicObject, GroupVersionKind, PostParams};
 use tower_http::cors::{Any, CorsLayer};
+use qflow_types::{QuantumWorkflow, QuantumWorkflowSpec};
+use qflowc::compile_qflow_file;
 
 
 #[derive(Serialize, Debug)]
@@ -70,6 +74,7 @@ async fn main() {
     let app = Router::new()
         .route("/api/workflows/{name}", get(fetch_workflow_from_jobs))
         .route("/api/workflows/{namespace}/{name}/tasks/{task_name}/results", get(fetch_task_results))
+        .route("/api/workflows/{namespace}/{name}/qasm", post(submit_qasm))
         .with_state(app_state)
         .layer(cors);
 
@@ -198,5 +203,76 @@ async fn fetch_task_results(
     } else {
         eprintln!("No succeeded pod found with label '{}'", pod_label);
         Err(StatusCode::NOT_FOUND)
+    }
+}
+async fn submit_qasm(
+    State(state): State<Arc<AppState>>,
+    Path((namespace, name)): Path<(String, String)>,
+    body: String,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    // this will accept a QASM file and invoke the qflowc compiler to create a Kubernetes Job and apply it
+
+    // first construct a basic .qflow and inject the QASM content
+    let qasm_content = body.trim();
+    if qasm_content.is_empty() {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    let qasm_content = qasm_content.replace("\r\n", "\n").replace("\r", "\n");
+
+    // write the QASM content to a temporary file
+    let qasm_path = std::env::temp_dir().join("temp_circuit.qasm");
+    std::fs::write(&qasm_path, qasm_content).map_err(|e| {
+        eprintln!("Error writing temporary QASM file: {}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+    let qasm_path = qasm_path.to_str().unwrap_or_default();
+    // creating a generic QFlow workflow content as this is for basic tasks
+    // for now, more involved workflows can be constructed via cli
+
+    let qflow_content = format!(
+        "workflow {}  {{ \n\
+            task simple-task {{ \n\
+                circuit_from: \"{}\",\n\
+                image: \"qsim\",\n\
+                params_from: \"qflowc/examples/sim_params.json\"\n\
+            }}
+        \n}}",
+        name,
+        qasm_path
+    );
+    println!("QASM content:\n{}", qflow_content);
+    let qflowc_path = std::env::temp_dir().join("temp_workflow.qflow");
+
+    std::fs::write(&qflowc_path, qflow_content).map_err(|e| {
+        eprintln!("Error writing temporary QFlow file: {}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    let res = compile_qflow_file(&qflowc_path);
+
+    if let Ok(yaml_output) = res {
+        let workflow: QuantumWorkflow = serde_yaml::from_str(&yaml_output).map_err(|e| {
+            eprintln!("Error parsing YAML output: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+        let api: Api<QuantumWorkflow> = Api::namespaced(state.client.clone(), &namespace);
+
+        api.create(&PostParams::default(), &workflow)
+            .await
+            .map_err(|e| {
+                eprintln!("Error creating QuantumWorkflow: {}", e);
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?;
+
+        let response = serde_json::json!({
+            "message": "QuantumWorkflow created successfully",
+            "workflow": workflow,
+        });
+        Ok(Json(response))
+    } else {
+        eprintln!("Error compiling QFlow file: {:?}", res);
+        Err(StatusCode::INTERNAL_SERVER_ERROR)
     }
 }

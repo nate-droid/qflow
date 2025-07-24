@@ -1,3 +1,4 @@
+use std::ops::Deref;
 use num_complex::Complex;
 use rand::Rng;
 use rand::distributions::{Distribution, WeightedIndex};
@@ -128,6 +129,13 @@ impl StateVector {
         if !self.amplitudes.is_empty() {
             self.amplitudes[0] = Complex::new(1.0, 0.0);
         }
+    }
+}
+
+impl Deref for StateVector {
+    type Target = [Complex<f64>];
+    fn deref(&self) -> &Self::Target {
+        &self.amplitudes
     }
 }
 

@@ -12,6 +12,7 @@
       <sourceFolder url="file://$MODULE_DIR$/qsim/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/vqa-runner/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/hamiltonian/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/ml/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/qsim/examples" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/qflowc/target" />
       <excludeFolder url="file://$MODULE_DIR$/target" />

@@ -1,0 +1,24 @@
+[package]
+name = "ml"
+version = "0.1.0"
+edition = "2024"
+
+
+[lib]
+name = "quantum_kernel_lib"
+crate-type = ["cdylib"]
+path = "src/integrations.rs"
+
+
+[dependencies]
+num-complex = "0.4.6"
+pyo3 = { version = "0.25.1", features = ["extension-module"] }
+numpy = "0.25.0"
+ndarray = "0.16.1"
+qsim = { path = "../qsim" }
+
+#[lib]
+#name = "ml"
+#crate-type = ["cdylib"]
+
+

@@ -89,15 +89,28 @@
         .vis-grid line { stroke: var(--border-primary); stroke-opacity: 0.7; shape-rendering: crispEdges; }
         .vis-grid path { stroke-width: 0; }
 
+        /* Navigation */
+        .nav-link {
+            border-bottom: 2px solid transparent;
+            transition: color 0.2s, border-color 0.2s;
+        }
+        .nav-link.active {
+            color: var(--brand-color);
+            border-bottom-color: var(--brand-color);
+        }
+
     </style>
 </head>
 <body class="h-full">
 <div class="flex flex-col h-screen bg-slate-900">
     <!-- Header -->
     <header class="bg-slate-900/70 backdrop-blur-sm border-b border-slate-700/80 p-4 shadow-lg z-20 flex justify-between items-center shrink-0">
-        <div>
-            <h1 class="text-xl font-bold text-white">QuantumWorkflow Visualizer</h1>
-            <p class="text-sm text-slate-400">Status: <span class="font-semibold text-indigo-400" id="workflow-name-display">Idle</span></p>
+        <div class="flex items-center gap-8">
+            <h1 class="text-xl font-bold text-white">QuantumWorkflow</h1>
+            <nav class="flex items-center gap-6 text-sm font-medium text-slate-400">
+                <a href="#" id="nav-visualizer" class="nav-link active">Visualizer</a>
+                <a href="#" id="nav-submitter" class="nav-link">Submit QASM</a>
+            </nav>
         </div>
         <div id="polling-status" class="text-sm text-slate-400 items-center gap-2 hidden">
             <svg class="animate-spin h-4 w-4 text-indigo-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
@@ -106,7 +119,7 @@
     </header>
 
     <!-- Main Content -->
-    <main class="flex-1 flex overflow-hidden">
+    <main id="visualizer-page" class="flex-1 flex overflow-hidden">
         <div id="cy-container" class="flex-1 relative">
             <div id="cy"></div>
             <!-- Initial Fetch Overlay -->
@@ -127,7 +140,7 @@
         <aside id="details-panel" class="w-full md:w-1/3 lg:w-1/4 bg-slate-800/80 backdrop-blur-sm border-l border-slate-700/80 flex flex-col transition-all">
             <div class="p-6 overflow-y-auto flex-1">
                 <div id="details-content" class="transition-opacity duration-300 opacity-100">
-                    <h2 id="details-title" class="text-xl font-bold text-white mb-6">Select a Task</h2>
+                    <h2 id="details-title" class="text-xl font-bold text-white mb-6">Status: <span id="workflow-name-display" class="text-indigo-400 font-semibold">Idle</span></h2>
                     <!-- Placeholder shown when no task is selected -->
                     <div id="details-placeholder" class="text-center text-slate-400 pt-10">
                         <svg xmlns="http://www.w3.org/2000/svg" class="mx-auto h-10 w-10 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9 5.25h.008v.008H12v-.008z" /></svg>
@@ -165,6 +178,35 @@
                 </div>
             </div>
         </aside>
+    </main>
+
+    <main id="qasm-submitter-page" class="flex-1 overflow-y-auto p-8 hidden">
+        <div class="max-w-4xl mx-auto">
+            <h2 class="text-2xl font-bold text-white mb-2">Submit OpenQASM Workflow</h2>
+            <p class="text-slate-400 mb-6">Paste your OpenQASM 2.0 code below to create and run a new workflow.</p>
+
+            <div id="qasm-notification" class="hidden p-4 mb-4 rounded-md"></div>
+
+            <div class="space-y-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="qasm-workflow-name" class="block text-sm font-medium text-slate-300 mb-1">Workflow Name</label>
+                        <input type="text" id="qasm-workflow-name" class="bg-slate-800 border border-slate-600 focus:ring-indigo-500 focus:border-indigo-500 rounded-md py-2 px-3 text-white w-full" placeholder="e.g., my-bell-state-exp">
+                    </div>
+                    <div>
+                        <label for="qasm-namespace" class="block text-sm font-medium text-slate-300 mb-1">Namespace</label>
+                        <input type="text" id="qasm-namespace" class="bg-slate-800 border border-slate-600 focus:ring-indigo-500 focus:border-indigo-500 rounded-md py-2 px-3 text-white w-full" value="default">
+                    </div>
+                </div>
+                <div>
+                    <label for="qasm-input" class="block text-sm font-medium text-slate-300 mb-1">OpenQASM 2.0 Code</label>
+                    <textarea id="qasm-input" rows="15" class="w-full bg-slate-950 border border-slate-600 rounded-md p-3 font-code text-indigo-300 focus:ring-indigo-500 focus:border-indigo-500" placeholder="OPENQASM 2.0;&#ninclude &quot;qelib1.inc&quot;;&#n&#10;qreg q[2];&#10;creg c[2];&#10;&#10;h q[0];&#10;cx q[0], q[1];&#10;measure q -> c;"></textarea>
+                </div>
+                <div class="flex justify-end">
+                    <button id="qasm-submit-button" class="btn btn-primary">Submit Workflow</button>
+                </div>
+            </div>
+        </div>
     </main>
 </div>
 
@@ -204,6 +246,14 @@
 
         // --- DOM Elements ---
         const dom = {
+            nav: {
+                visualizer: document.getElementById('nav-visualizer'),
+                submitter: document.getElementById('nav-submitter'),
+            },
+            pages: {
+                visualizer: document.getElementById('visualizer-page'),
+                submitter: document.getElementById('qasm-submitter-page'),
+            },
             graphOverlay: document.getElementById('graph-overlay'),
             fetchButton: document.getElementById('fetch-button'),
             workflowInput: document.getElementById('workflow-input'),
@@ -221,6 +271,13 @@
                 circuit: document.getElementById('details-circuit'),
                 params: document.getElementById('details-params'),
                 resultsBtnContainer: document.getElementById('results-button-container'),
+            },
+            qasm: {
+                notification: document.getElementById('qasm-notification'),
+                nameInput: document.getElementById('qasm-workflow-name'),
+                namespaceInput: document.getElementById('qasm-namespace'),
+                input: document.getElementById('qasm-input'),
+                submitButton: document.getElementById('qasm-submit-button'),
             },
             errorModal: {
                 overlay: document.getElementById('error-modal-overlay'),
@@ -240,6 +297,20 @@
 
         // --- Initial State ---
         dom.details.fetchPrompt.classList.remove('hidden');
+
+        // --- Page Navigation ---
+        function showPage(pageName) {
+            Object.values(dom.pages).forEach(p => p.classList.add('hidden'));
+            Object.values(dom.nav).forEach(n => n.classList.remove('active'));
+
+            if (pageName === 'visualizer') {
+                dom.pages.visualizer.classList.remove('hidden');
+                dom.nav.visualizer.classList.add('active');
+            } else if (pageName === 'submitter') {
+                dom.pages.submitter.classList.remove('hidden');
+                dom.nav.submitter.classList.add('active');
+            }
+        }
 
         // --- Modal Logic ---
         function showModal(modal, title, content) {
@@ -381,6 +452,65 @@
             }
         }
 
+        async function handleQasmSubmit() {
+            const name = dom.qasm.nameInput.value.trim();
+            const namespace = dom.qasm.namespaceInput.value.trim();
+            const qasm = dom.qasm.input.value.trim();
+
+            if (!name || !namespace || !qasm) {
+                showQasmNotification('Please fill in all fields.', 'error');
+                return;
+            }
+
+            dom.qasm.submitButton.textContent = 'Submitting...';
+            dom.qasm.submitButton.disabled = true;
+
+            const apiUrl = `http://127.0.0.1:3000/api/workflows/${namespace}/${name}/qasm`;
+
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain' },
+                    body: qasm
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`Server responded with ${response.status}. Message: ${errorText}`);
+                }
+
+                const result = await response.json();
+                showQasmNotification(`Workflow "${result.metadata.name}" created successfully! Redirecting...`, 'success');
+
+                setTimeout(() => {
+                    dom.workflowInput.value = name;
+                    dom.namespaceInput.value = namespace;
+                    showPage('visualizer');
+                    handleFetchWorkflow(false);
+                    dom.qasm.notification.classList.add('hidden');
+                }, 2000);
+
+            } catch (error) {
+                showQasmNotification(`Error: ${error.message}`, 'error');
+            } finally {
+                dom.qasm.submitButton.textContent = 'Submit Workflow';
+                dom.qasm.submitButton.disabled = false;
+            }
+        }
+
+        function showQasmNotification(message, type = 'success') {
+            const notification = dom.qasm.notification;
+            notification.textContent = message;
+            notification.className = 'p-4 mb-4 rounded-md'; // Reset classes
+            if (type === 'success') {
+                notification.classList.add('bg-green-500/20', 'text-green-300');
+            } else {
+                notification.classList.add('bg-red-500/20', 'text-red-300');
+            }
+            notification.classList.remove('hidden');
+        }
+
+
         // --- Rendering Logic ---
         function renderGraph(workflow) {
             const elements = [];
@@ -406,11 +536,6 @@
             cy.fit(30);
         }
 
-        /**
-         * Intelligently updates the graph nodes based on new workflow status
-         * without a full re-render, preserving zoom/pan and selection.
-         * @param {object} newWorkflow The new workflow object from the API.
-         */
         function updateGraph(newWorkflow) {
             const newStatuses = newWorkflow.status?.taskStatus || {};
             const oldStatuses = currentWorkflow.status?.taskStatus || {};
@@ -429,7 +554,6 @@
                             .addClass(`status-${newStatus}`)
                             .data('status', newStatus);
 
-                        // Check if the updated node is the one currently selected
                         if (taskName === selectedNodeId) {
                             selectedNodeStatusChanged = true;
                         }
@@ -437,9 +561,7 @@
                 }
             }
 
-            // If the selected node's status changed, refresh the details panel
             if (selectedNodeStatusChanged) {
-                // We need to get the full new task data for the details panel
                 const updatedTaskData = newWorkflow.spec.tasks.find(t => t.name === selectedNodeId);
                 if(updatedTaskData) {
                     selectedNode.data('rawData', updatedTaskData);
@@ -571,6 +693,10 @@
         dom.resultsModal.tabVis.addEventListener('click', (e) => { e.preventDefault(); switchResultTabs(true); });
         dom.resultsModal.tabLog.addEventListener('click', (e) => { e.preventDefault(); switchResultTabs(false); });
 
+        dom.nav.visualizer.addEventListener('click', (e) => { e.preventDefault(); showPage('visualizer'); });
+        dom.nav.submitter.addEventListener('click', (e) => { e.preventDefault(); showPage('submitter'); });
+
+        dom.qasm.submitButton.addEventListener('click', handleQasmSubmit);
     });
 </script>
 </body>

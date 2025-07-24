@@ -15,6 +15,7 @@ pub trait Simulator {
     /// by applying the Pauli operators P to a copy of the state and
     /// calculating ⟨ψ|P|ψ⟩.
     fn measure_pauli_string_expectation(&mut self, operators: Vec<Gate>) -> f64;
+    fn get_statevector(&self) -> &StateVector;
 }
 
 pub trait QuantumGate {
@@ -85,6 +86,9 @@ impl Simulator for QuantumSimulator {
         expectation.re
     }
 
+    fn get_statevector(&self) -> &StateVector {
+        &self.state
+    }
 }
 
 impl QuantumSimulator {
@@ -94,8 +98,6 @@ impl QuantumSimulator {
             state: StateVector::new(num_qubits),
         }
     }
-
-
 
     pub fn num_qubits(&self) -> usize {
         self.num_qubits
@@ -178,6 +180,18 @@ pub fn construct_gate_matrix(gate: &Gate) -> Option<GateMatrix> {
                 ],
             ])
 
+        }
+        Gate::RZ(qubit, theta) => {
+            Some([
+                [
+                    Complex::new((theta / 2.0).cos(), -(theta / 2.0).sin()),
+                    Complex::new(0.0, 0.0),
+                ],
+                [
+                    Complex::new(0.0, 0.0),
+                    Complex::new((theta / 2.0).cos(), (theta / 2.0).sin()),
+                ],
+            ])
         }
         _ => {
             eprintln!("Unsupported gate type: {:?}", gate);
