@@ -1,80 +1,107 @@
 <!DOCTYPE html>
-<html lang="en" class="h-full bg-gray-900">
+<html lang="en" class="h-full bg-slate-900">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Live QuantumWorkflow Visualizer</title>
+    <title>QuantumWorkflow Visualizer</title>
 
+    <!-- External Libraries -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.28.1/cytoscape.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dagre/0.8.5/dagre.min.js"></script>
     <script src="https://unpkg.com/cytoscape-dagre@2.5.0/cytoscape-dagre.js"></script>
     <script src="https://d3js.org/d3.v7.min.js"></script>
 
+    <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
 
+    <!-- Custom Styles -->
     <style>
-        body { font-family: 'Inter', sans-serif; color: #e5e7eb; }
+        :root {
+            --brand-color: #4f46e5; /* indigo-600 */
+            --brand-color-hover: #4338ca; /* indigo-700 */
+            --bg-primary: #0f172a; /* slate-900 */
+            --bg-secondary: #1e293b; /* slate-800 */
+            --bg-tertiary: #334155; /* slate-700 */
+            --border-primary: #334155;
+            --border-secondary: #475569; /* slate-600 */
+            --text-primary: #e2e8f0; /* slate-200 */
+            --text-secondary: #94a3b8; /* slate-400 */
+            --text-accent: #818cf8; /* indigo-400 */
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            color: var(--text-primary);
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
         .font-code { font-family: 'Fira Code', monospace; }
+
         #cy { height: 100%; width: 100%; }
+
+        /* Custom Scrollbar */
         ::-webkit-scrollbar { width: 8px; }
-        ::-webkit-scrollbar-track { background: #1f2937; }
-        ::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #6b7280; }
+        ::-webkit-scrollbar-track { background: var(--bg-secondary); }
+        ::-webkit-scrollbar-thumb { background: var(--border-secondary); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #64748b; } /* slate-500 */
 
+        /* Modal Styles */
         .modal-overlay {
-            position: fixed; inset: 0; background-color: rgba(0, 0, 0, 0.7);
+            position: fixed; inset: 0; background-color: rgba(15, 23, 42, 0.8);
+            backdrop-filter: blur(4px);
             display: none; align-items: center; justify-content: center; z-index: 100;
+            opacity: 0; transition: opacity 0.2s ease-in-out;
         }
+        .modal-overlay.visible { display: flex; opacity: 1; }
         .modal-content {
-            background-color: #1f2937; color: #d1d5db; padding: 2rem;
-            border-radius: 0.5rem; border: 1px solid #4b5563;
-            width: 90%; max-width: 800px; max-height: 90vh; overflow-y: auto;
+            background-color: var(--bg-secondary);
+            border: 1px solid var(--border-primary);
+            padding: 1.5rem; border-radius: 0.5rem;
+            width: 90%; max-width: 800px; max-height: 90vh;
+            display: flex; flex-direction: column;
+            transform: scale(0.95); opacity: 0;
+            transition: transform 0.2s ease-in-out, opacity 0.2s ease-in-out;
         }
-        .modal-content h2 { font-size: 1.5rem; font-weight: bold; margin-bottom: 1rem; }
-        .modal-content pre { background-color: #111827; padding: 1rem; border-radius: 0.25rem; font-size: 0.875rem; overflow-x: auto; }
-        .modal-content code { color: #93c5fd; }
-        .modal-content p { margin-bottom: 1rem; }
-        .modal-content strong { color: white; font-weight: 600; }
+        .modal-overlay.visible .modal-content { transform: scale(1); opacity: 1; }
+        .modal-content h2 { font-size: 1.25rem; font-weight: 600; margin-bottom: 1.5rem; }
         .modal-close-btn {
-            position: absolute; top: 1rem; right: 1rem; color: #9ca3af;
-            cursor: pointer; background: none; border: none; font-size: 1.5rem;
+            position: absolute; top: 0.75rem; right: 0.75rem; color: var(--text-secondary);
+            cursor: pointer; background: none; border: none; font-size: 1.5rem; line-height: 1;
         }
-        .modal-close-btn:hover { color: white; }
+        .modal-close-btn:hover { color: var(--text-primary); }
 
-        .input-group { display: flex; gap: 1rem; margin-bottom: 1rem; }
-        .input-group input { background-color: #374151; border: 1px solid #4b5563; color: white; border-radius: 0.375rem; padding: 0.5rem 0.75rem; width: 100%; }
-        .fetch-button { background-color: #4f46e5; color: white; font-weight: 600; padding: 0.5rem 1rem; border-radius: 0.375rem; width: 100%; text-align: center; cursor: pointer; }
-        .fetch-button:hover { background-color: #4338ca; }
-        .results-button { background-color: #16a34a; color: white; font-weight: 500; padding: 0.5rem 1rem; border-radius: 0.375rem; text-align: center; cursor: pointer; margin-top: 1rem; }
-        .results-button:hover { background-color: #15803d; }
+        /* Button Styles */
+        .btn { transition: background-color 0.2s; }
+        .btn-primary { background-color: var(--brand-color); color: white; font-weight: 500; padding: 0.625rem 1rem; border-radius: 0.375rem; text-align: center; cursor: pointer; }
+        .btn-primary:hover:not(:disabled) { background-color: var(--brand-color-hover); }
+        .btn-primary:disabled { background-color: #374151; cursor: not-allowed; }
+        .btn-success { background-color: #16a34a; color: white; font-weight: 500; padding: 0.5rem 1rem; border-radius: 0.375rem; text-align: center; cursor: pointer; }
+        .btn-success:hover { background-color: #15803d; }
 
-        #q-state-vis-container {
-            background-color: #111827;
-            border-radius: 0.5rem;
-            padding: 1.5rem 1rem 1rem 0;
-        }
-        .vis-bar { fill: #38bdf8; transition: fill 0.2s; }
-        .vis-bar:hover { fill: #0ea5e9; }
-        .vis-axis path, .vis-axis line { stroke: #4b5563; }
-        .vis-axis text { fill: #9ca3af; font-family: 'Fira Code', monospace; }
-        .vis-grid line { stroke: #374151; stroke-opacity: 0.7; shape-rendering: crispEdges; }
+        /* D3 Chart Styles */
+        #q-state-vis-container { background-color: #020617; border-radius: 0.5rem; padding: 1.5rem 1rem 1rem 0; } /* slate-950 */
+        .vis-bar { fill: var(--text-accent); transition: fill 0.2s; }
+        .vis-bar:hover { fill: #a5b4fc; } /* indigo-300 */
+        .vis-axis path, .vis-axis line { stroke: var(--border-secondary); }
+        .vis-axis text { fill: var(--text-secondary); font-family: 'Fira Code', monospace; font-size: 0.75rem; }
+        .vis-grid line { stroke: var(--border-primary); stroke-opacity: 0.7; shape-rendering: crispEdges; }
         .vis-grid path { stroke-width: 0; }
 
     </style>
 </head>
-<body class="h-full antialiased">
-<div class="flex flex-col h-screen">
+<body class="h-full">
+<div class="flex flex-col h-screen bg-slate-900">
     <!-- Header -->
-    <header class="bg-gray-800/50 backdrop-blur-sm border-b border-gray-700 p-4 shadow-lg z-20 flex justify-between items-center">
+    <header class="bg-slate-900/70 backdrop-blur-sm border-b border-slate-700/80 p-4 shadow-lg z-20 flex justify-between items-center shrink-0">
         <div>
             <h1 class="text-xl font-bold text-white">QuantumWorkflow Visualizer</h1>
-            <p class="text-sm text-gray-400">Status: <span class="font-semibold text-cyan-400" id="workflow-name-display">Idle</span></p>
+            <p class="text-sm text-slate-400">Status: <span class="font-semibold text-indigo-400" id="workflow-name-display">Idle</span></p>
         </div>
-        <div id="polling-status" class="text-sm text-gray-400 hidden">
-            <span class="animate-pulse">◉</span> Polling for updates...
+        <div id="polling-status" class="text-sm text-slate-400 items-center gap-2 hidden">
+            <svg class="animate-spin h-4 w-4 text-indigo-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+            <span class="hidden md:inline">Polling for updates...</span>
         </div>
     </header>
 
@@ -82,35 +109,59 @@
     <main class="flex-1 flex overflow-hidden">
         <div id="cy-container" class="flex-1 relative">
             <div id="cy"></div>
-            <div id="graph-overlay" class="absolute inset-0 bg-gray-900/80 flex items-center justify-center z-30">
-                <div class="w-full max-w-md p-4">
-                    <h2 class="text-2xl font-bold text-center text-white mb-4">Fetch a Workflow</h2>
-                    <div class="input-group">
-                        <input type="text" id="workflow-input" placeholder="Workflow Name" value="my-quantum-workflow">
-                        <input type="text" id="namespace-input" placeholder="Namespace" value="default">
+            <!-- Initial Fetch Overlay -->
+            <div id="graph-overlay" class="absolute inset-0 bg-slate-900/80 flex items-center justify-center z-30 transition-opacity duration-300">
+                <div class="w-full max-w-md p-4 text-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="mx-auto h-12 w-12 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1"><path stroke-linecap="round" stroke-linejoin="round" d="M10 21h7a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v11m0 5l-2.293-2.293a1 1 0 010-1.414l7-7a1 1 0 011.414 0l7 7a1 1 0 010 1.414L15 21m-5-5h2m-1-4V5" /></svg>
+                    <h2 class="mt-2 text-2xl font-bold text-white mb-2">Fetch a Workflow</h2>
+                    <p class="text-slate-400 mb-6">Enter the name and namespace of a workflow to visualize its graph.</p>
+                    <div class="flex flex-col sm:flex-row gap-3 mb-4">
+                        <input type="text" id="workflow-input" class="bg-slate-800 border border-slate-600 focus:ring-indigo-500 focus:border-indigo-500 rounded-md py-2 px-3 text-white w-full" placeholder="Workflow Name" value="my-quantum-workflow">
+                        <input type="text" id="namespace-input" class="bg-slate-800 border border-slate-600 focus:ring-indigo-500 focus:border-indigo-500 rounded-md py-2 px-3 text-white w-full" placeholder="Namespace" value="default">
                     </div>
-                    <button id="fetch-button" class="fetch-button">Fetch Workflow</button>
+                    <button id="fetch-button" class="btn btn-primary w-full">Fetch & Visualize</button>
                 </div>
             </div>
         </div>
-        <aside id="details-panel" class="w-full md:w-1/3 lg:w-1/4 bg-gray-800/80 backdrop-blur-sm border-l border-gray-700 flex flex-col">
+        <!-- Details Panel -->
+        <aside id="details-panel" class="w-full md:w-1/3 lg:w-1/4 bg-slate-800/80 backdrop-blur-sm border-l border-slate-700/80 flex flex-col transition-all">
             <div class="p-6 overflow-y-auto flex-1">
-                <h2 id="details-title" class="text-lg font-bold text-white mb-4">Select a Task</h2>
-                <p id="details-placeholder" class="text-gray-400">Fetch a workflow to begin.</p>
-                <div id="details-data" class="hidden space-y-4">
-                    <div>
-                        <h3 class="text-sm font-semibold text-gray-400 mb-2">Status</h3>
-                        <p id="details-status" class="font-code text-sm"></p>
+                <div id="details-content" class="transition-opacity duration-300 opacity-100">
+                    <h2 id="details-title" class="text-xl font-bold text-white mb-6">Select a Task</h2>
+                    <!-- Placeholder shown when no task is selected -->
+                    <div id="details-placeholder" class="text-center text-slate-400 pt-10">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="mx-auto h-10 w-10 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9 5.25h.008v.008H12v-.008z" /></svg>
+                        <p class="mt-2">Select a task node from the graph to view its details here.</p>
+                        <p id="details-fetch-prompt" class="mt-4 text-sm text-slate-500 hidden">Fetch a workflow to begin.</p>
                     </div>
-                    <div>
-                        <h3 id="details-circuit-title" class="text-sm font-semibold text-gray-400 mb-2">Circuit</h3>
-                        <pre class="bg-gray-900 rounded-lg p-4 text-sm font-code text-cyan-300 overflow-x-auto"><code id="details-circuit"></code></pre>
+                    <!-- Data shown when a task is selected -->
+                    <div id="details-data" class="hidden space-y-5">
+                        <!-- Status Card -->
+                        <div class="bg-slate-900/50 p-4 rounded-lg border border-slate-700">
+                            <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-2">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                Status
+                            </h3>
+                            <p id="details-status" class="font-code text-sm font-semibold"></p>
+                        </div>
+                        <!-- Circuit/Command Card -->
+                        <div class="bg-slate-900/50 p-4 rounded-lg border border-slate-700">
+                            <h3 id="details-circuit-title" class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-2">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M12 6V3m0 18v-3" /></svg>
+                                Circuit (OpenQASM)
+                            </h3>
+                            <pre class="bg-slate-950 rounded-md p-3 text-sm font-code text-indigo-300 overflow-x-auto"><code id="details-circuit"></code></pre>
+                        </div>
+                        <!-- Parameters Card -->
+                        <div class="bg-slate-900/50 p-4 rounded-lg border border-slate-700">
+                            <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-2">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                                Parameters
+                            </h3>
+                            <pre class="bg-slate-950 rounded-md p-3 text-sm font-code text-amber-300 overflow-x-auto"><code id="details-params"></code></pre>
+                        </div>
+                        <div id="results-button-container" class="pt-2"></div>
                     </div>
-                    <div>
-                        <h3 class="text-sm font-semibold text-gray-400 mb-2">Parameters</h3>
-                        <pre class="bg-gray-900 rounded-lg p-4 text-sm font-code text-yellow-300 overflow-x-auto"><code id="details-params"></code></pre>
-                    </div>
-                    <div id="results-button-container"></div>
                 </div>
             </div>
         </aside>
@@ -121,17 +172,26 @@
 <div id="error-modal-overlay" class="modal-overlay">
     <div id="error-modal-content" class="modal-content" onclick="event.stopPropagation()"></div>
 </div>
+
 <div id="results-modal-overlay" class="modal-overlay">
     <div id="results-modal-content" class="modal-content" onclick="event.stopPropagation()">
         <button class="modal-close-btn" onclick="closeModal('results-modal-overlay')">&times;</button>
-        <h2 id="results-modal-title" class="text-cyan-400">Task Results</h2>
-        <div id="q-state-vis-container" class="mb-6 hidden">
-            <h3 class="text-sm font-semibold text-gray-400 mb-2">State Vector Probabilities</h3>
-            <div id="q-state-vis" class="w-full h-64"></div>
+        <h2 id="results-modal-title" class="text-indigo-400 shrink-0">Task Results</h2>
+        <!-- Tabs -->
+        <div class="border-b border-slate-600 mb-4 shrink-0">
+            <nav id="results-tabs" class="-mb-px flex space-x-6" aria-label="Tabs">
+                <a href="#" id="tab-vis" class="whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm border-indigo-500 text-indigo-400">State Vector</a>
+                <a href="#" id="tab-log" class="whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm border-transparent text-slate-400 hover:text-slate-300 hover:border-slate-400">Raw Log</a>
+            </nav>
         </div>
-        <div id="raw-log-container" class="hidden">
-            <h3 class="text-sm font-semibold text-gray-400 mb-2">Full Execution Log</h3>
-            <pre><code id="results-modal-log" class="font-code"></code></pre>
+        <div class="flex-1 overflow-y-auto">
+            <div id="q-state-vis-container" class="">
+                <h3 class="text-sm font-semibold text-slate-400 mb-2">State Vector Probabilities</h3>
+                <div id="q-state-vis" class="w-full h-72"></div>
+            </div>
+            <div id="raw-log-container" class="hidden">
+                <pre><code id="results-modal-log" class="font-code text-sm"></code></pre>
+            </div>
         </div>
     </div>
 </div>
@@ -151,7 +211,9 @@
             workflowNameDisplay: document.getElementById('workflow-name-display'),
             pollingStatus: document.getElementById('polling-status'),
             details: {
+                content: document.getElementById('details-content'),
                 placeholder: document.getElementById('details-placeholder'),
+                fetchPrompt: document.getElementById('details-fetch-prompt'),
                 data: document.getElementById('details-data'),
                 title: document.getElementById('details-title'),
                 status: document.getElementById('details-status'),
@@ -166,32 +228,37 @@
             },
             resultsModal: {
                 overlay: document.getElementById('results-modal-overlay'),
-                content: document.getElementById('results-modal-content'),
                 title: document.getElementById('results-modal-title'),
                 logContainer: document.getElementById('raw-log-container'),
                 log: document.getElementById('results-modal-log'),
                 visContainer: document.getElementById('q-state-vis-container'),
                 vis: document.getElementById('q-state-vis'),
+                tabVis: document.getElementById('tab-vis'),
+                tabLog: document.getElementById('tab-log'),
             }
         };
+
+        // --- Initial State ---
+        dom.details.fetchPrompt.classList.remove('hidden');
 
         // --- Modal Logic ---
         function showModal(modal, title, content) {
             modal.content.innerHTML = `
                 <button class="modal-close-btn" onclick="closeModal('${modal.overlay.id}')">&times;</button>
-                <h2 style="color: #fca5a5;">${title}</h2>
+                <h2 style="color: #f87171;">${title}</h2>
                 <div>${content}</div>`;
-            modal.overlay.style.display = 'flex';
+            modal.overlay.classList.add('visible');
         }
         window.closeModal = (overlayId) => {
-            document.getElementById(overlayId).style.display = 'none';
-        }
-        dom.errorModal.overlay.addEventListener('click', (e) => {
-            if (e.target === dom.errorModal.overlay) closeModal(dom.errorModal.overlay.id);
+            const overlay = document.getElementById(overlayId);
+            overlay.classList.remove('visible');
+        };
+        document.querySelectorAll('.modal-overlay').forEach(overlay => {
+            overlay.addEventListener('click', (e) => {
+                if (e.target === overlay) closeModal(overlay.id);
+            });
         });
-        dom.resultsModal.overlay.addEventListener('click', (e) => {
-            if (e.target === dom.resultsModal.overlay) closeModal(dom.resultsModal.overlay.id);
-        });
+
 
         // --- Polling Logic ---
         function stopPolling() {
@@ -203,6 +270,7 @@
         function startPolling() {
             stopPolling();
             dom.pollingStatus.classList.remove('hidden');
+            dom.pollingStatus.classList.add('flex');
             pollingTimeoutId = setTimeout(() => handleFetchWorkflow(true), 5000);
         }
 
@@ -210,13 +278,13 @@
         const cy = cytoscape({
             container: document.getElementById('cy'),
             style: [
-                { selector: 'node', style: { 'background-color': '#1f2937', 'border-color': '#4b5563', 'border-width': 2, 'label': 'data(label)', 'color': '#e5e7eb', 'font-size': '12px', 'text-valign': 'center', 'text-halign': 'center', 'width': '140px', 'height': '50px', 'shape': 'round-rectangle', 'transition-property': 'background-color, border-color', 'transition-duration': '0.3s' } },
-                { selector: 'edge', style: { 'width': 2, 'line-color': '#6b7280', 'target-arrow-color': '#6b7280', 'target-arrow-shape': 'triangle', 'curve-style': 'bezier' } },
-                { selector: 'node:selected', style: { 'border-color': '#38bdf8', 'background-color': '#075985' } },
+                { selector: 'node', style: { 'background-color': '#1e293b', 'border-color': '#475569', 'border-width': 2, 'label': 'data(label)', 'color': '#e2e8f0', 'font-size': '12px', 'text-valign': 'center', 'text-halign': 'center', 'width': '140px', 'height': '50px', 'shape': 'round-rectangle', 'transition-property': 'background-color, border-color', 'transition-duration': '0.3s' } },
+                { selector: 'edge', style: { 'width': 2, 'line-color': '#64748b', 'target-arrow-color': '#64748b', 'target-arrow-shape': 'triangle', 'curve-style': 'bezier' } },
+                { selector: 'node:selected', style: { 'border-color': '#818cf8', 'background-color': '#312e81' } },
                 { selector: '.status-succeeded', style: { 'border-color': '#22c55e' } },
                 { selector: '.status-running', style: { 'border-color': '#f59e0b', 'line-style': 'dashed', 'border-dash-pattern': [6, 3] } },
                 { selector: '.status-failed', style: { 'border-color': '#ef4444' } },
-                { selector: '.status-pending', style: { 'border-color': '#6b7280' } },
+                { selector: '.status-pending', style: { 'border-color': '#64748b' } },
             ],
             layout: { name: 'dagre' }
         });
@@ -229,10 +297,12 @@
 
             if (!isPoll) {
                 stopPolling();
-                dom.graphOverlay.style.display = 'flex';
+                dom.fetchButton.textContent = "Fetching...";
+                dom.fetchButton.disabled = true;
+                dom.graphOverlay.classList.add('opacity-50');
             }
 
-            const apiUrl = `http://localhost:3000/api/workflows/${workflowName}?namespace=${namespace}`;
+            const apiUrl = `http://127.0.0.1:3000/api/workflows/${workflowName}?namespace=${namespace}`;
 
             try {
                 const response = await fetch(apiUrl);
@@ -240,18 +310,34 @@
                     const errorText = await response.text();
                     throw new Error(`Server responded with ${response.status}. Message: ${errorText}`);
                 }
-                currentWorkflow = await response.json();
+                const newWorkflowData = await response.json();
 
-                dom.workflowNameDisplay.textContent = `${currentWorkflow.metadata.name} (in ${namespace})`;
-                dom.graphOverlay.style.display = 'none';
-                renderGraph(currentWorkflow);
+                if (isPoll && currentWorkflow) {
+                    // If polling, just update the graph nodes instead of re-rendering
+                    updateGraph(newWorkflowData);
+                } else {
+                    // Initial fetch, render the full graph
+                    dom.workflowNameDisplay.textContent = `${newWorkflowData.metadata.name} (in ${namespace})`;
+                    dom.graphOverlay.classList.add('opacity-0', 'pointer-events-none');
+                    dom.details.fetchPrompt.classList.add('hidden');
+                    resetDetailsPanel();
+                    renderGraph(newWorkflowData);
+                }
+
+                currentWorkflow = newWorkflowData; // Always update to the latest version
                 startPolling();
+
             } catch (error) {
                 console.error("Failed to fetch workflow:", error);
                 stopPolling();
                 if (!isPoll) {
-                    dom.graphOverlay.style.display = 'flex';
-                    showModal(dom.errorModal, 'Connection Failed', `<p>Could not fetch the workflow. Ensure the backend is running and the workflow name/namespace are correct.</p><p><strong>URL Attempted:</strong> ${apiUrl}</p><p><strong>Error:</strong> ${error.message}</p>`);
+                    showModal(dom.errorModal, 'Connection Failed', `<p>Could not fetch the workflow. Ensure the backend is running and the workflow name/namespace are correct.</p><p class="font-code text-sm mt-4"><strong>URL:</strong> ${apiUrl}</p><p class="font-code text-sm mt-2"><strong>Error:</strong> ${error.message}</p>`);
+                }
+            } finally {
+                if (!isPoll) {
+                    dom.fetchButton.textContent = "Fetch & Visualize";
+                    dom.fetchButton.disabled = false;
+                    dom.graphOverlay.classList.remove('opacity-50');
                 }
             }
         }
@@ -259,16 +345,18 @@
         async function handleFetchResults(taskName) {
             if (!currentWorkflow) return;
             const { name, namespace } = currentWorkflow.metadata;
-            const apiUrl = `http://localhost:3000/api/workflows/${namespace}/${name}/tasks/${taskName}/results`;
+            const apiUrl = `http://127.0.0.1:3000/api/workflows/${namespace}/${name}/tasks/${taskName}/results`;
 
             try {
                 const response = await fetch(apiUrl);
-                if (!response.ok) throw new Error(`Server responded with ${response.status}`);
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`Server responded with ${response.status}. Message: ${errorText || 'No error message'}`);
+                }
                 const results = await response.json();
 
                 dom.resultsModal.title.textContent = `Results for: ${taskName}`;
 
-                // FIX: Correctly look for the amplitudes array inside the finalStateVector object.
                 let amplitudes = null;
                 if (Array.isArray(results) && results.length > 0) {
                     const lastStep = results[results.length - 1];
@@ -277,24 +365,19 @@
                     }
                 }
 
-                if (amplitudes) {
-                    dom.resultsModal.visContainer.classList.remove('hidden');
-                    dom.resultsModal.logContainer.classList.add('hidden');
-                } else {
-                    dom.resultsModal.visContainer.classList.add('hidden');
-                    dom.resultsModal.logContainer.classList.remove('hidden');
-                    dom.resultsModal.log.textContent = JSON.stringify(results, null, 2);
-                }
-
-                dom.resultsModal.overlay.style.display = 'flex';
+                switchResultTabs(!!amplitudes);
 
                 if (amplitudes) {
                     renderStateVectorVisualization(amplitudes);
+                } else {
+                    dom.resultsModal.log.textContent = JSON.stringify(results, null, 2);
                 }
+
+                dom.resultsModal.overlay.classList.add('visible');
 
             } catch (error) {
                 console.error("Failed to fetch results:", error);
-                showModal(dom.errorModal, 'Failed to Fetch Results', `<p>Could not fetch results for task <strong>${taskName}</strong>.</p><p><strong>URL Attempted:</strong> ${apiUrl}</p><p><strong>Error:</strong> ${error.message}</p>`);
+                showModal(dom.errorModal, 'Failed to Fetch Results', `<p>Could not fetch results for task <strong>${taskName}</strong>.</p><p class="font-code text-sm mt-4"><strong>URL:</strong> ${apiUrl}</p><p class="font-code text-sm mt-2"><strong>Error:</strong> ${error.message}</p>`);
             }
         }
 
@@ -323,28 +406,86 @@
             cy.fit(30);
         }
 
+        /**
+         * Intelligently updates the graph nodes based on new workflow status
+         * without a full re-render, preserving zoom/pan and selection.
+         * @param {object} newWorkflow The new workflow object from the API.
+         */
+        function updateGraph(newWorkflow) {
+            const newStatuses = newWorkflow.status?.taskStatus || {};
+            const oldStatuses = currentWorkflow.status?.taskStatus || {};
+            const selectedNode = cy.$('node:selected');
+            const selectedNodeId = selectedNode.id();
+            let selectedNodeStatusChanged = false;
+
+            for (const taskName in newStatuses) {
+                const newStatus = newStatuses[taskName].toLowerCase();
+                const oldStatus = (oldStatuses[taskName] || 'pending').toLowerCase();
+
+                if (newStatus !== oldStatus) {
+                    const node = cy.getElementById(taskName);
+                    if (node.length) {
+                        node.removeClass(`status-${oldStatus}`)
+                            .addClass(`status-${newStatus}`)
+                            .data('status', newStatus);
+
+                        // Check if the updated node is the one currently selected
+                        if (taskName === selectedNodeId) {
+                            selectedNodeStatusChanged = true;
+                        }
+                    }
+                }
+            }
+
+            // If the selected node's status changed, refresh the details panel
+            if (selectedNodeStatusChanged) {
+                // We need to get the full new task data for the details panel
+                const updatedTaskData = newWorkflow.spec.tasks.find(t => t.name === selectedNodeId);
+                if(updatedTaskData) {
+                    selectedNode.data('rawData', updatedTaskData);
+                    displayTaskDetails(selectedNode);
+                }
+            }
+        }
+
+        function resetDetailsPanel() {
+            dom.details.content.style.opacity = '0';
+            setTimeout(() => {
+                dom.details.title.textContent = 'Select a Task';
+                dom.details.placeholder.classList.remove('hidden');
+                dom.details.data.classList.add('hidden');
+                cy.elements().unselect();
+                dom.details.content.style.opacity = '1';
+            }, 150);
+        }
+
         function displayTaskDetails(node) {
             const task = node.data('rawData');
             const status = node.data('status');
 
-            dom.details.placeholder.classList.add('hidden');
-            dom.details.data.classList.remove('hidden');
-            dom.details.title.textContent = task.name;
-            dom.details.status.textContent = status.charAt(0).toUpperCase() + status.slice(1);
+            dom.details.content.style.opacity = '0';
 
-            const isQuantum = task.quantum;
-            dom.details.circuitTitle.textContent = isQuantum ? "Quantum Circuit (OpenQASM)" : "Task Details";
-            dom.details.circuit.textContent = isQuantum ? task.quantum.circuit : (task.classical?.command || 'N/A');
-            dom.details.params.textContent = JSON.stringify(isQuantum ? task.quantum.params : task.classical?.params, null, 2) || 'N/A';
+            setTimeout(() => {
+                dom.details.placeholder.classList.add('hidden');
+                dom.details.data.classList.remove('hidden');
+                dom.details.title.textContent = task.name;
+                dom.details.status.textContent = status.charAt(0).toUpperCase() + status.slice(1);
 
-            dom.details.resultsBtnContainer.innerHTML = '';
-            if (status === 'succeeded') {
-                const button = document.createElement('button');
-                button.textContent = 'View Results';
-                button.className = 'results-button';
-                button.onclick = () => handleFetchResults(task.name);
-                dom.details.resultsBtnContainer.appendChild(button);
-            }
+                const isQuantum = task.quantum;
+                dom.details.circuitTitle.textContent = isQuantum ? "Quantum Circuit (OpenQASM)" : "Classical Command";
+                dom.details.circuit.textContent = isQuantum ? task.quantum.circuit : (task.classical?.command || 'N/A');
+                dom.details.params.textContent = JSON.stringify(isQuantum ? task.quantum.params : (task.classical?.params || {}), null, 2);
+
+                dom.details.resultsBtnContainer.innerHTML = '';
+                if (status === 'succeeded') {
+                    const button = document.createElement('button');
+                    button.textContent = 'View Results';
+                    button.className = 'btn btn-success w-full';
+                    button.onclick = () => handleFetchResults(task.name);
+                    dom.details.resultsBtnContainer.appendChild(button);
+                }
+                dom.details.content.style.opacity = '1';
+            }, 150);
         }
 
         function renderStateVectorVisualization(amplitudes) {
@@ -356,15 +497,10 @@
                 return;
             }
 
-            // FIX: Correctly parse the [real, imaginary] pairs from the amplitudes array.
-            const data = amplitudes.map((amp, i) => {
-                const real = amp[0];
-                const imag = amp[1];
-                return {
-                    state: i,
-                    probability: (real * real) + (imag * imag)
-                };
-            });
+            const data = amplitudes.map((amp, i) => ({
+                state: i,
+                probability: (amp[0] * amp[0]) + (amp[1] * amp[1])
+            }));
 
             const numQubits = Math.log2(data.length);
             if (numQubits % 1 !== 0) {
@@ -372,17 +508,14 @@
                 return;
             }
 
-            const margin = {top: 20, right: 20, bottom: 50, left: 50};
+            const margin = {top: 20, right: 20, bottom: 60, left: 60};
             const width = visElement.clientWidth - margin.left - margin.right;
             const height = visElement.clientHeight - margin.top - margin.bottom;
 
-            const svg = d3.select(visElement)
-                .append("svg")
-                .attr("width", "100%")
-                .attr("height", "100%")
+            const svg = d3.select(visElement).append("svg")
+                .attr("width", "100%").attr("height", "100%")
                 .attr("viewBox", `0 0 ${visElement.clientWidth} ${visElement.clientHeight}`)
-                .append("g")
-                .attr("transform", `translate(${margin.left},${margin.top})`);
+                .append("g").attr("transform", `translate(${margin.left},${margin.top})`);
 
             const x = d3.scaleBand()
                 .range([0, width])
@@ -390,58 +523,54 @@
                 .padding(0.2);
 
             svg.append("g")
-                .attr("transform", `translate(0,${height})`)
-                .call(d3.axisBottom(x))
+                .attr("transform", `translate(0,${height})`).call(d3.axisBottom(x))
                 .selectAll("text")
-                .attr("class", "vis-axis")
-                .attr("transform", "translate(-10,0)rotate(-45)")
-                .style("text-anchor", "end");
+                .attr("class", "vis-axis").attr("transform", "translate(-10,0)rotate(-45)").style("text-anchor", "end");
 
-            const y = d3.scaleLinear()
-                .domain([0, 1])
-                .range([height, 0]);
+            const y = d3.scaleLinear().domain([0, 1]).range([height, 0]);
 
-            svg.append("g")
-                .call(d3.axisLeft(y).ticks(5).tickFormat(d3.format(".1%")))
-                .selectAll("text")
-                .attr("class", "vis-axis");
+            svg.append("g").call(d3.axisLeft(y).ticks(5).tickFormat(d3.format(".0%"))).selectAll("text").attr("class", "vis-axis");
 
             svg.append("text")
-                .attr("transform", "rotate(-90)")
-                .attr("y", 0 - margin.left)
-                .attr("x",0 - (height / 2))
-                .attr("dy", "1em")
-                .style("text-anchor", "middle")
-                .attr("class", "vis-axis")
-                .text("Probability");
+                .attr("transform", "rotate(-90)").attr("y", 0 - margin.left).attr("x",0 - (height / 2))
+                .attr("dy", "1em").style("text-anchor", "middle").attr("class", "vis-axis").text("Probability");
 
-            svg.append("g")
-                .attr("class", "vis-grid")
-                .call(d3.axisLeft(y).ticks(5).tickSize(-width).tickFormat(""));
+            svg.append("g").attr("class", "vis-grid").call(d3.axisLeft(y).ticks(5).tickSize(-width).tickFormat(""));
 
-            svg.selectAll("mybar")
-                .data(data)
-                .join("rect")
+            svg.selectAll("mybar").data(data).join("rect")
                 .attr("class", "vis-bar")
                 .attr("x", d => x(`|${d.state.toString(2).padStart(numQubits, '0')}⟩`))
                 .attr("y", d => y(d.probability))
                 .attr("width", x.bandwidth())
                 .attr("height", d => height - y(d.probability))
-                .append("title")
-                .text(d => `Probability: ${(d.probability * 100).toFixed(2)}%`);
+                .append("title").text(d => `State: |${d.state.toString(2).padStart(numQubits, '0')}⟩\nProbability: ${(d.probability * 100).toFixed(3)}%`);
+        }
+
+        function switchResultTabs(showVis) {
+            const activeClasses = ['border-indigo-500', 'text-indigo-400'];
+            const inactiveClasses = ['border-transparent', 'text-slate-400', 'hover:text-slate-300', 'hover:border-slate-400'];
+
+            dom.resultsModal.tabVis.classList.remove(...(showVis ? inactiveClasses : activeClasses));
+            dom.resultsModal.tabVis.classList.add(...(showVis ? activeClasses : inactiveClasses));
+            dom.resultsModal.tabLog.classList.remove(...(!showVis ? inactiveClasses : activeClasses));
+            dom.resultsModal.tabLog.classList.add(...(!showVis ? activeClasses : inactiveClasses));
+
+            dom.resultsModal.visContainer.classList.toggle('hidden', !showVis);
+            dom.resultsModal.logContainer.classList.toggle('hidden', showVis);
         }
 
         // --- Event Listeners ---
         dom.fetchButton.addEventListener('click', () => handleFetchWorkflow(false));
+        dom.workflowInput.addEventListener('keyup', (e) => { if (e.key === 'Enter') handleFetchWorkflow(false); });
+        dom.namespaceInput.addEventListener('keyup', (e) => { if (e.key === 'Enter') handleFetchWorkflow(false); });
         cy.on('tap', 'node', (evt) => displayTaskDetails(evt.target));
         cy.on('tap', (evt) => {
-            if (evt.target === cy) {
-                dom.details.title.textContent = 'Select a Task';
-                dom.details.placeholder.classList.remove('hidden');
-                dom.details.data.classList.add('hidden');
-                cy.elements().unselect();
-            }
+            if (evt.target === cy) resetDetailsPanel();
         });
+
+        dom.resultsModal.tabVis.addEventListener('click', (e) => { e.preventDefault(); switchResultTabs(true); });
+        dom.resultsModal.tabLog.addEventListener('click', (e) => { e.preventDefault(); switchResultTabs(false); });
+
     });
 </script>
 </body>

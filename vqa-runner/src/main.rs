@@ -1,15 +1,7 @@
-// in vqa-runner/src/main.rs
-
 use hamiltonian::{Hamiltonian, PauliTerm};
 use std::cell::RefCell;
-use std::str::FromStr;
-// The `Simulator` trait is now expected to be defined in your `qsim` crate
-// and implemented for `StatevectorSimulator`. You should move the trait definition
-// from this file into your `qsim` crate.
 use qsim::{Gate, QuantumSimulator as StatevectorSimulator};
 use qsim::simulator::Simulator;
-// The `Simulator` trait definition has been REMOVED from this file.
-// It should be moved to your `qsim` crate.
 
 /// A VQE problem runner that is configured with a specific Hamiltonian and ansatz circuit.
 /// It is generic over any type `S` that implements the `Simulator` trait.
