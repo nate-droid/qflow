@@ -1,7 +1,8 @@
-use std::convert::Into;
+use std::fmt::Display;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Gate {
+    I(usize),
     H(usize),
     X(usize),
     Y(usize),
@@ -11,6 +12,23 @@ pub enum Gate {
     RY(usize, f64), // target and theta
     RZ(usize, f64), // target and theta
     Measure,
+}
+
+impl Display for Gate {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Gate::I(q) => write!(f, "I q[{}]", q),
+            Gate::H(q) => write!(f, "H q[{}]", q),
+            Gate::X(q) => write!(f, "X q[{}]", q),
+            Gate::Y(q) => write!(f, "Y q[{}]", q),
+            Gate::Z(q) => write!(f, "Z q[{}]", q),
+            Gate::CX(c, t) => write!(f, "CX q[{}],q[{}]", c, t),
+            Gate::RX(q, theta) => write!(f, "RX q[{}],{}", q, theta),
+            Gate::RY(q, theta) => write!(f, "RY q[{}],{}", q, theta),
+            Gate::RZ(q, theta) => write!(f, "RZ q[{}],{}", q, theta),
+            Gate::Measure => write!(f, "Measure"),
+        }
+    }
 }
 
 impl Gate {

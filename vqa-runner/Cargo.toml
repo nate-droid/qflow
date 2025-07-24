@@ -4,6 +4,9 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-argmin = "0.10.0"
+argmin = { version = "0.10.0" }
+
 
 qsim = { path = "../qsim" }
+hamiltonian = { path = "../hamiltonian" }
+nalgebra = "0.33.2"

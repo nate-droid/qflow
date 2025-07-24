@@ -100,11 +100,6 @@ async fn fetch_workflow_from_jobs(
         })
         .collect();
 
-    let job_list = jobs_api.list(&lp).await.map_err(|e| {
-        eprintln!("Error listing jobs: {}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-
     if workflow_jobs.is_empty() {
         eprintln!("No jobs found with prefix '{}' in namespace '{}'", workflow_name, params.namespace);
         return Err(StatusCode::NOT_FOUND);
@@ -120,7 +115,7 @@ async fn fetch_workflow_from_jobs(
         // Prefer the explicit task-name label, but fall back to the job's full name.
         let task_name = labels.and_then(|l| l.get("quantum.workflow/task-name").cloned())
             .unwrap_or_else(|| job.metadata.name.clone().unwrap_or_default());
-        
+
         let depends_on = annotations
             .and_then(|a| a.get("quantum.workflow/dependsOn"))
             .map(|s| s.split(',').map(String::from).collect())
@@ -167,7 +162,7 @@ async fn fetch_workflow_from_jobs(
         spec: Spec { tasks },
         status: Status { task_status: task_status_map },
     };
-    
+
     Ok(Json(workflow))
 }
 
@@ -177,7 +172,7 @@ async fn fetch_task_results(
     Path((namespace, workflow_name, task_name)): Path<(String, String, String)>,
 ) -> Result<Json<serde_json::Value>, StatusCode> {
     let pods: Api<Pod> = Api::namespaced(state.client.clone(), &namespace);
-    // The job-name label is standard for pods created by a Job.
+
     let pod_label = format!("job-name={}", task_name);
     let lp = ListParams::default().labels(&pod_label);
 

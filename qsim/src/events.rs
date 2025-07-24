@@ -2,7 +2,6 @@ use crate::state::StateVector;
 use serde::Serialize;
 use std::io::Write;
 
-/// Top-level enum to distinguish between different event types.
 #[derive(Serialize)]
 #[serde(tag = "eventType")]
 pub enum Event {
@@ -11,7 +10,6 @@ pub enum Event {
     MeasurementResult(MeasurementInfo),
 }
 
-/// Information about the start of a simulation.
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SimulationStartInfo {
@@ -19,7 +17,6 @@ pub struct SimulationStartInfo {
     pub num_gates: usize,
 }
 
-/// Information about a single gate application step.
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GateInfo {
@@ -28,7 +25,6 @@ pub struct GateInfo {
     pub state_vector: StateVector,
 }
 
-/// Information about the final measurement.
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MeasurementInfo {

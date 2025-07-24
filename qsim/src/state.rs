@@ -2,6 +2,7 @@ use num_complex::Complex;
 use rand::Rng;
 use rand::distributions::{Distribution, WeightedIndex};
 use serde::Serialize;
+use crate::simulator::{QuantumGate};
 
 #[derive(Serialize, Clone)]
 pub struct StateVector {
@@ -22,7 +23,7 @@ impl StateVector {
             amplitudes,
         }
     }
-    
+
     pub fn apply_single_qubit_gate(
         &mut self,
         gate_matrix: &[[Complex<f64>; 2]; 2],
@@ -43,32 +44,53 @@ impl StateVector {
         }
         self.amplitudes = new_amplitudes;
     }
-    
+
     pub fn apply_multi_qubit_gate(
         &mut self,
         gate_matrix: &[[Complex<f64>; 2]; 2],
         target_qubits: &[usize],
     ) {
-        if target_qubits.len() != 2 {
-            panic!("Multi-qubit gates currently only support two qubits.");
-        }
+        let n = target_qubits.len();
         let mut new_amplitudes = self.amplitudes.clone();
-        let k1 = 1 << target_qubits[0];
-        let k2 = 1 << target_qubits[1];
 
         for i in 0..self.amplitudes.len() {
-            if (i & k1) == 0 && (i & k2) == 0 {
-                let j = i | k1 | k2;
-                let amp_i = self.amplitudes[i];
-                let amp_j = self.amplitudes[j];
-
-                new_amplitudes[i] = gate_matrix[0][0] * amp_i + gate_matrix[0][1] * amp_j;
-                new_amplitudes[j] = gate_matrix[1][0] * amp_i + gate_matrix[1][1] * amp_j;
+            // Find the basis state indices for the subspace spanned by the target qubits
+            let mut basis_indices = Vec::with_capacity(1 << n);
+            for b in 0..(1 << n) {
+                let mut idx = i;
+                for (bit_pos, &qubit) in target_qubits.iter().enumerate() {
+                    let bit = (b >> bit_pos) & 1;
+                    if bit == 1 {
+                        idx |= 1 << qubit;
+                    } else {
+                        idx &= !(1 << qubit);
+                    }
+                }
+                basis_indices.push(idx);
+            }
+            // Only update amplitudes for the "lowest" representative in each subspace
+            if basis_indices[0] == i {
+                let mut amps = vec![Complex::new(0.0, 0.0); 1 << n];
+                for (j, &idx) in basis_indices.iter().enumerate() {
+                    amps[j] = self.amplitudes[idx];
+                }
+                // Apply the gate matrix (assumed to be 2^n x 2^n)
+                let gate_size = 1 << n;
+                let gate: &[[Complex<f64>; 2]] = gate_matrix as &[_];
+                let mut new_amps = vec![Complex::new(0.0, 0.0); gate_size];
+                for row in 0..gate_size {
+                    for col in 0..gate_size {
+                        new_amps[row] += gate[row][col] * amps[col];
+                    }
+                }
+                for (j, &idx) in basis_indices.iter().enumerate() {
+                    new_amplitudes[idx] = new_amps[j];
+                }
             }
         }
         self.amplitudes = new_amplitudes;
     }
-    
+
     pub fn apply_cx(&mut self, control_qubit: usize, target_qubit: usize) {
         let mut new_amplitudes = self.amplitudes.clone();
         let control_mask = 1 << control_qubit;
@@ -82,7 +104,7 @@ impl StateVector {
         }
         self.amplitudes = new_amplitudes;
     }
-    
+
     pub fn measure_all(&mut self, rng: &mut impl Rng) -> usize {
         let probabilities: Vec<f64> = self.amplitudes.iter().map(|a| a.norm_sqr()).collect();
         let dist =
@@ -139,7 +161,7 @@ mod tests {
             [Complex::new(1.0, 0.0), Complex::new(0.0, 0.0)],
         ];
         let mut state = StateVector::new(2); // State is |00>
-        
+
         state.apply_single_qubit_gate(&pauli_x, 1);
 
         let mut rng = thread_rng();

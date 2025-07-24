@@ -5,23 +5,21 @@ use kube::{
     api::{Api, ListParams, Patch, PatchParams, PostParams},
     client::Client,
     runtime::{controller::Action, Controller},
-    CustomResource, Resource,
+    Resource,
 };
-use petgraph::{graphmap::DiGraphMap, visit::Topo, Graph};
-use serde::{Deserialize, Serialize};
+use petgraph::{graphmap::DiGraphMap, visit::Topo};
+
 use std::sync::Arc;
 use thiserror::Error;
 use tokio::time::Duration;
 use tracing::{error, info, warn};
-use schemars::JsonSchema;
-use serde_json::json;
 
 use k8s_openapi::api::batch::v1::{Job, JobSpec};
 use k8s_openapi::api::core::v1::{PodTemplateSpec, PodSpec, Container, ConfigMap, Volume, VolumeMount, ConfigMapVolumeSource, PersistentVolumeClaim, PersistentVolumeClaimSpec, ResourceRequirements, VolumeResourceRequirements, PersistentVolumeClaimVolumeSource};
 use k8s_openapi::apimachinery::pkg::api::resource::Quantity;
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta;
 use qflow_types::{QFlowTask, QFlowTaskSpec};
-use qflow_types::{QuantumWorkflowSpec, QuantumWorkflowStatus, QuantumWorkflow};
+use qflow_types::{QuantumWorkflowStatus, QuantumWorkflow};
 
 #[derive(Error, Debug)]
 pub enum Error {

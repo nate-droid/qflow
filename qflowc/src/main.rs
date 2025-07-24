@@ -4,11 +4,11 @@ use anyhow::{Result, anyhow, Context};
 use std::io::Read;
 use std::path::PathBuf;
 
-// FIX: Import the renamed types directly without aliasing.
+
 use qflow_types::{QuantumWorkflow, QuantumWorkflowSpec, QFlowTask, QFlowTaskSpec, VolumeSpec};
 use kube::api::ObjectMeta;
 
-// --- 1. Abstract Syntax Tree (AST) ---
+
 #[derive(Debug, Clone)]
 pub enum AstTaskSpec {
     Classical { image: String },
@@ -28,7 +28,6 @@ pub struct AstWorkflow {
     tasks: Vec<AstTask>,
 }
 
-// --- 2. The Parser (Unchanged logic, but returns new AST types) ---
 fn workflow_parser() -> impl Parser<char, AstWorkflow, Error = Simple<char>> {
     let ident = filter(|c: &char| c.is_alphanumeric() || *c == '-')
         .repeated().at_least(1).collect::<String>().padded();
@@ -37,9 +36,7 @@ fn workflow_parser() -> impl Parser<char, AstWorkflow, Error = Simple<char>> {
         .ignore_then(filter(|c| *c != '"').repeated())
         .then_ignore(just('"'))
         .collect::<String>().padded();
-
-    // FIX: Define a more robust parser for the task body that handles
-    // unordered fields and optional trailing commas.
+    
     #[derive(Clone, Debug)]
     enum Field {
         Image(String),
@@ -99,7 +96,6 @@ fn workflow_parser() -> impl Parser<char, AstWorkflow, Error = Simple<char>> {
     workflow.padded().then_ignore(end())
 }
 
-// --- 3. The Compiler ---
 fn compile(ast: AstWorkflow) -> Result<QuantumWorkflow> {
     let tasks = ast.tasks.into_iter()
         .map(|task| -> Result<QFlowTask> {
@@ -124,7 +120,6 @@ fn compile(ast: AstWorkflow) -> Result<QuantumWorkflow> {
     })
 }
 
-// --- 4. Main Application Logic ---
 #[derive(ClapParser, Debug)]
 struct Args { #[arg(short, long)] file: Option<String> }
 

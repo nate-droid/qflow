@@ -3,7 +3,19 @@ use super::state::StateVector;
 use num_complex::Complex;
 use std::f64::consts::FRAC_1_SQRT_2;
 use crate::circuit::Circuit;
-use crate::events::{Event, GateInfo, MeasurementInfo, SimulationStartInfo, emit_event};
+use crate::events::{Event, GateInfo, MeasurementInfo, SimulationStartInfo};
+
+pub trait Simulator {
+    /// Resets the simulator to the |0...0⟩ state.
+    fn reset(&mut self);
+    /// Applies a single quantum gate to the state.
+    fn apply_gate(&mut self, gate: &Gate);
+    /// Measures the expectation value of a given Pauli string.
+    /// The internal state |ψ⟩ is not changed. The measurement is performed
+    /// by applying the Pauli operators P to a copy of the state and
+    /// calculating ⟨ψ|P|ψ⟩.
+    fn measure_pauli_string_expectation(&mut self, operators: Vec<Gate>) -> f64;
+}
 
 pub trait QuantumGate {
     fn apply(&self, state: &mut [Complex<f64>]);
@@ -14,25 +26,11 @@ pub struct QuantumSimulator {
     pub state: StateVector,
 }
 
-impl QuantumSimulator {
-    pub fn new(num_qubits: usize) -> Self {
-        QuantumSimulator {
-            num_qubits,
-            state: StateVector::new(num_qubits),
-        }
-    }
-
-    pub fn reset(&mut self) {
+impl Simulator for QuantumSimulator {
+    fn reset(&mut self) {
         self.state.reset();
     }
-
-    pub fn apply_circuit(&mut self, circuit: &Circuit) {
-        for gate in &circuit.gates {
-            self.apply_gate(gate);
-        }
-    }
-
-    pub fn apply_gate(&mut self, gate: &Gate) {
+    fn apply_gate(&mut self, gate: &Gate) {
         match gate {
             Gate::H(target) => self.state.apply_single_qubit_gate(&HADAMARD, *target),
             Gate::X(target) => self.state.apply_single_qubit_gate(&PAULI_X, *target),
@@ -44,7 +42,7 @@ impl QuantumSimulator {
             }
             _ => {
                 let matrix = construct_gate_matrix(gate);
-                
+
                 if let Some(matrix) = matrix {
                     if gate.target().len() == 1 {
                         self.state.apply_single_qubit_gate(&matrix, gate.target()[0]);
@@ -59,6 +57,58 @@ impl QuantumSimulator {
         }
     }
 
+    fn measure_pauli_string_expectation(&mut self, operators: Vec<Gate>) -> f64 {
+        use num_complex::Complex;
+
+        // Save the original state
+        let original_state = self.state.amplitudes.clone();
+
+        // Apply the Pauli string operator to the state
+        for op in &operators {
+            match op {
+                Gate::X(target) => self.state.apply_single_qubit_gate(&PAULI_X, *target),
+                Gate::Y(target) => self.state.apply_single_qubit_gate(&PAULI_Y, *target),
+                Gate::Z(target) => self.state.apply_single_qubit_gate(&PAULI_Z, *target),
+                _ => panic!("Unsupported operator in Pauli string expectation"),
+            }
+        }
+
+        // Compute the inner product <psi|P|psi>
+        let mut expectation = Complex::new(0.0, 0.0);
+        for (a, b) in original_state.iter().zip(self.state.amplitudes.iter()) {
+            expectation += a.conj() * b;
+        }
+
+        // Restore the original state
+        self.state.amplitudes = original_state;
+
+        expectation.re
+    }
+
+}
+
+impl QuantumSimulator {
+    pub fn new(num_qubits: usize) -> Self {
+        QuantumSimulator {
+            num_qubits,
+            state: StateVector::new(num_qubits),
+        }
+    }
+
+
+
+    pub fn num_qubits(&self) -> usize {
+        self.num_qubits
+    }
+
+    pub fn apply_circuit(&mut self, circuit: &Circuit) {
+        for gate in &circuit.gates {
+            self.apply_gate(gate);
+        }
+    }
+
+
+
     pub fn get_probability(&self, state_index: usize) -> f64 {
         if state_index >= self.state.amplitudes.len() {
             eprintln!("Error: State index out of bounds.");
@@ -67,6 +117,9 @@ impl QuantumSimulator {
         let amp = self.state.amplitudes[state_index];
         (amp.re * amp.re + amp.im * amp.im).sqrt()
     }
+
+
+
 }
 
 // custom type for gate matrices
@@ -173,7 +226,7 @@ pub fn run_simulation(qasm_input: &str) -> Option<Vec<Event>> {
                 panic!("Unsupported gate type encountered during simulation.");
             }
         }
-        
+
         events.push(Event::GateApplication(GateInfo {
             step: i + 1,
             gate: gate_str,

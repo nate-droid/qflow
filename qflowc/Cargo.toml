@@ -6,7 +6,7 @@ edition = "2024"
 [dependencies]
 chumsky = "0.9.0"
 serde_yaml = "0.9"
-clap = { version = "4.0", features = ["derive"] } # For command-line argument parsing
+clap = { version = "4.0", features = ["derive"] }
 anyhow = "1.0"
 qflow-types = { path = "../qflow-types" }
 kube = "1.1.0"
