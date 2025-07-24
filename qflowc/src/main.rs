@@ -1,7 +1,6 @@
 use chumsky::prelude::*;
 use clap::Parser as ClapParser;
 use anyhow::{Result, anyhow, Context};
-use std::io::Read;
 use std::path::PathBuf;
 
 
@@ -123,18 +122,19 @@ fn compile(ast: AstWorkflow) -> Result<QuantumWorkflow> {
 #[derive(ClapParser, Debug)]
 struct Args { #[arg(short, long)] file: Option<String> }
 
-fn main() -> Result<()> {
-    let args = Args::parse();
-    let mut src = String::new();
-    // let path = args.file.unwrap_or_else(|| "./qflowc/examples/quantum_test.qflow".to_string());
-    let path = args.file.unwrap_or_else(|| "./qflow-operator/tests/dag-test.qflow".to_string());
-    src = std::fs::read_to_string(path)?;
-
+pub fn compile_qflow_file<P: AsRef<std::path::Path>>(path: P) -> Result<String> {
+    let src = std::fs::read_to_string(&path)?;
     let ast = workflow_parser().parse(src).map_err(|e| anyhow!("Parser errors: {:?}", e))?;
     let k8s_resource = compile(ast)?;
     let yaml_output = serde_yaml::to_string(&k8s_resource)?;
-    println!("---\n{}", yaml_output);
+    Ok(yaml_output)
+}
 
+fn main() -> Result<()> {
+    let args = Args::parse();
+    let path = args.file.unwrap_or_else(|| "./qflow-operator/tests/dag-test.qflow".to_string());
+    let yaml_output = compile_qflow_file(&path)?;
+    println!("---\n{}", yaml_output);
     Ok(())
 }
 
