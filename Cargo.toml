@@ -1,3 +1,3 @@
 [workspace]
 resolver = "3"
-members = [ "hamiltonian", "ml", "qflow-backend", "qflow-operator", "qflow-types","qflowc", "qsim", "vqa-runner"]
+members = [ "hamiltonian", "ml", "qflow-backend", "qflow-operator", "qflow-types","qflowc", "qsim", "svm-operator", "vqa-runner"]

@@ -109,7 +109,16 @@ impl QuantumSimulator {
         }
     }
 
-
+    // sets the simulator state to a specific configuration ie: [0, 0, 1, 0, 0] == "00100"
+    pub fn prepare_initial_state(&mut self, initial_state: &[u8]) {
+        self.reset();
+        for (i, &state) in initial_state.iter().enumerate() {
+            if state == 1 {
+                // Apply an X gate to flip |0> to |1>
+                self.apply_gate(&Gate::X(i));
+            }
+        }
+    }
 
     pub fn get_probability(&self, state_index: usize) -> f64 {
         if state_index >= self.state.amplitudes.len() {
