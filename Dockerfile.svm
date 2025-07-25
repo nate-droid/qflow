@@ -1,23 +1,41 @@
-FROM python:3.13-bullseye
+FROM python:3.13-bullseye AS builder
+
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y curl build-essential && rm -rf /var/lib/apt/lists/*
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 ENV PATH="/root/.cargo/bin:${PATH}"
 
-
-COPY ml/requirements.txt .
-
-RUN pip install --no-cache-dir -r requirements.txt
-
 COPY . .
+RUN pip install --no-cache-dir -r ml/requirements.txt
 
 WORKDIR /app/ml
 
 RUN maturin build --release --out ../target/wheels
 
 
-WORKDIR /app
-RUN pip install --no-cache-dir target/wheels/*.whl
+# --- Stage 2: Final Image ---
+FROM python:3.13-slim-bullseye
 
-CMD ["python", "svm.py"]
+WORKDIR /app
+
+RUN ls -l && ls -l /app && pwd
+
+COPY --from=builder /app/ml/requirements.txt requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY --from=builder /app/target/wheels /wheels/
+RUN pip install --no-cache-dir /wheels/*.whl && rm -rf /wheels
+
+RUN ls -l /app
+RUN pwd
+
+COPY --from=builder /app/ml/svm2.py .
+COPY --from=builder /app/ml/my_data.csv .
+
+RUN mkdir -p /app/output
+
+CMD ["python", "svm2.py", \
+     "--data_path", "my_data.csv", \
+     "--target-column", "target", \
+     "--output-plot", "output/plot.png", \
+     "--output-metrics", "output/metrics.txt"]

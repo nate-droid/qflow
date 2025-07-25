@@ -175,13 +175,26 @@ if __name__ == '__main__':
                         help='Proportion of the dataset to allocate to the test split.')
     workflow_group.add_argument('--random-state', type=int, default=42,
                         help='Random seed for reproducibility of the train/test split.')
+    workflow_group.add_argument('--server', action='store_true',
+                        help='If set, keeps the process alive for container exec access.')
 
     args = parser.parse_args()
 
     if args.create_dummy_data:
-        create_dummy_dataset(args.create_dummy_data, dataset_type=args.dummy_type)
+        create_dummy_dataset(args.create_dummy_data, args.dummy_type)
+        exit(0)
     elif args.data_path and args.target_column:
         main(args)
     else:
-        print("Error: You must either use --create-dummy-data or provide --data_path and --target-column.")
-        parser.print_help()
+        print("Error: Either --create-dummy-data or both --data_path and --target-column must be specified.")
+        exit(1)
+
+    if args.server:
+        import time
+        print("Server mode enabled. Keeping process alive. Press Ctrl+C to exit.")
+        try:
+            while True:
+                time.sleep(600)
+        except KeyboardInterrupt:
+            print("Exiting server mode.")
+
