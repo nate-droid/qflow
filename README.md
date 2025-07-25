@@ -1,42 +1,31 @@
 # QFlow
 
-Is a sort of "Quantum Aware" Data Flow operator for Kubernetes. It allows you to run quantum circuits on a quantum 
-computer, and then use the results in your data flow pipelines.
+QFlow is a Kubernetes-native dataflow system for running quantum circuits and integrating their results into classical pipelines. It is designed to be practical, minimal, and easy to explore for developers interested in quantum workflows.
 
-It is composed of several components that are detailed below.
+## Project Structure
 
-# frontend
+- **frontend/**: Simple HTML interface for viewing QFlow custom resources and pipeline status.
+- **qflow-backend/**: API backend serving pipeline and resource status to the frontend.
+- **qflow-operator/**: Kubernetes operator managing QFlow custom resources, running quantum jobs, and updating results.
+- **qflowc/**: Compiler for the QFlow DSL. Converts OpenQASM or QFlow DSL files into Kubernetes CRDs for use with the operator.
+- **qsim/**: Standalone quantum circuit simulator. Used by the operator, but can be run independently.
 
-Simple HTML page that allows you to view your QFlow CRDs and see the status of their pipelines.
+## Quickstart
 
-# QFlow Backend
-
-A backend API that serves requests to the frontend. This will expose the status of the QFlow CRDs.
-
-# QFlow Operator
-
-A Kubernetes operator that manages the lifecycle of QFlow CRDs. It will create the necessary resources to run your quantum circuits on a quantum computer (in this case just the qflow simulator), and then update the CRD with the results.
-
-# QFlowc
-
-A compiler for the QFlow DSL. This allows you to take your existing openqasm files and compile them into a CRD that can be used with the QFlow operator.
-
-Compile a qflow file to a CRD:
-
-```bash
-cat dag-test.qflow | cargo run -p qflowc | kubectl apply -f -
-```
-
-# qsim
-
-A minimal quantum computer simulator. It has been designed to be unaware of any of the other components, so can be used as a standalone simulator. It is used by the QFlow operator to run quantum circuits.
-
-You can run the provided examples (from the root directory) with:
+Run a quantum circuit example with the simulator:
 
 ```bash
 cargo run --bin qsim -- --input-file qsim/examples/bell.qasm --output-file results.json
 ```
 
-# vqa-runner
+Compile a QFlow DSL file to a CRD and apply it to your cluster:
 
-(Work in progress) A runner for Variational Quantum Algorithms (VQAs). It will take a QFlow CRD and run the VQA on it, updating the CRD with the results.
+```bash
+cat qflow-operator/tests/dag-test.qflow | cargo run -p qflowc | kubectl apply -f -
+```
+
+## Next Steps
+
+- Explore the `examples/` folders in `qsim/` and `qflowc/` for sample circuits and workflows.
+- See individual component READMEs for more details.
+- The code is intended to be self-explanatory and modular—feel free to dive in.
