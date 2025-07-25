@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>QuantumWorkflow Visualizer</title>
+    <title>Quantum Workflow UI</title>
 
     <!-- External Libraries -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -93,6 +93,7 @@
         .nav-link {
             border-bottom: 2px solid transparent;
             transition: color 0.2s, border-color 0.2s;
+            cursor: pointer;
         }
         .nav-link.active {
             color: var(--brand-color);
@@ -106,10 +107,11 @@
     <!-- Header -->
     <header class="bg-slate-900/70 backdrop-blur-sm border-b border-slate-700/80 p-4 shadow-lg z-20 flex justify-between items-center shrink-0">
         <div class="flex items-center gap-8">
-            <h1 class="text-xl font-bold text-white">QuantumWorkflow</h1>
+            <h1 class="text-xl font-bold text-white">Quantum Workflow</h1>
             <nav class="flex items-center gap-6 text-sm font-medium text-slate-400">
-                <a href="#" id="nav-visualizer" class="nav-link active">Visualizer</a>
-                <a href="#" id="nav-submitter" class="nav-link">Submit QASM</a>
+                <a id="nav-svm" class="nav-link active">Quantum SVM Experiment</a>
+                <a id="nav-visualizer" class="nav-link">Workflow Visualizer</a>
+                <a id="nav-submitter" class="nav-link">Submit QASM</a>
             </nav>
         </div>
         <div id="polling-status" class="text-sm text-slate-400 items-center gap-2 hidden">
@@ -119,7 +121,108 @@
     </header>
 
     <!-- Main Content -->
-    <main id="visualizer-page" class="flex-1 flex overflow-hidden">
+    <main id="svm-page" class="flex-1 overflow-y-auto p-8">
+        <div class="max-w-4xl mx-auto">
+            <h2 class="text-2xl font-bold text-white mb-2">Run a New Quantum SVM Experiment</h2>
+            <p class="text-slate-400 mb-6">Specify the parameters for the QuantumSVMWorkflow and click "Run Experiment" to submit.</p>
+
+            <!-- Main Form -->
+            <div class="space-y-8">
+                <!-- Dataset Section -->
+                <div class="p-6 bg-slate-800 rounded-lg border border-slate-700">
+                    <h3 class="text-lg font-semibold text-indigo-400 mb-4">Dataset Configuration</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label for="ds-generator" class="block text-sm font-medium text-slate-300 mb-1">Generator</label>
+                            <input type="text" id="ds-generator" class="bg-slate-900 border border-slate-600 focus:ring-indigo-500 focus:border-indigo-500 rounded-md py-2 px-3 text-white w-full" value="make_moons">
+                        </div>
+                        <div>
+                            <label for="ds-samples" class="block text-sm font-medium text-slate-300 mb-1">Samples</label>
+                            <input type="number" id="ds-samples" class="bg-slate-900 border border-slate-600 focus:ring-indigo-500 focus:border-indigo-500 rounded-md py-2 px-3 text-white w-full" value="100">
+                        </div>
+                        <div>
+                            <label for="ds-noise" class="block text-sm font-medium text-slate-300 mb-1">Noise</label>
+                            <input type="number" id="ds-noise" step="0.05" class="bg-slate-900 border border-slate-600 focus:ring-indigo-500 focus:border-indigo-500 rounded-md py-2 px-3 text-white w-full" value="0.1">
+                        </div>
+                        <div>
+                            <label for="ds-test-size" class="block text-sm font-medium text-slate-300 mb-1">Test Size</label>
+                            <input type="number" id="ds-test-size" step="0.05" class="bg-slate-900 border border-slate-600 focus:ring-indigo-500 focus:border-indigo-500 rounded-md py-2 px-3 text-white w-full" value="0.3">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Kernel & Trainer Section -->
+                <div class="grid md:grid-cols-2 gap-8">
+                    <div class="p-6 bg-slate-800 rounded-lg border border-slate-700">
+                        <h3 class="text-lg font-semibold text-indigo-400 mb-4">Kernel</h3>
+                        <div>
+                            <label for="kernel-image" class="block text-sm font-medium text-slate-300 mb-1">Container Image</label>
+                            <input type="text" id="kernel-image" class="bg-slate-900 border border-slate-600 focus:ring-indigo-500 focus:border-indigo-500 rounded-md py-2 px-3 text-white w-full" value="upcloud/quantum-svm:latest">
+                        </div>
+                    </div>
+                    <div class="p-6 bg-slate-800 rounded-lg border border-slate-700">
+                        <h3 class="text-lg font-semibold text-indigo-400 mb-4">Trainer</h3>
+                        <div>
+                            <label for="trainer-c" class="block text-sm font-medium text-slate-300 mb-1">C (Regularization Parameter)</label>
+                            <input type="number" id="trainer-c" class="bg-slate-900 border border-slate-600 focus:ring-indigo-500 focus:border-indigo-500 rounded-md py-2 px-3 text-white w-full" value="1.0">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Output Section -->
+                <div class="p-6 bg-slate-800 rounded-lg border border-slate-700">
+                    <h3 class="text-lg font-semibold text-indigo-400 mb-4">Output</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label for="output-model-name" class="block text-sm font-medium text-slate-300 mb-1">Model Name</label>
+                            <input type="text" id="output-model-name" class="bg-slate-900 border border-slate-600 focus:ring-indigo-500 focus:border-indigo-500 rounded-md py-2 px-3 text-white w-full" value="qsvm-model">
+                        </div>
+                        <div>
+                            <label for="output-plot-name" class="block text-sm font-medium text-slate-300 mb-1">Plot Name</label>
+                            <input type="text" id="output-plot-name" class="bg-slate-900 border border-slate-600 focus:ring-indigo-500 focus:border-indigo-500 rounded-md py-2 px-3 text-white w-full" value="qsvm-decision-boundary">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Submission & Status Section -->
+                <div class="pt-4 flex justify-end items-center gap-6">
+                    <div id="svm-status-display" class="text-slate-400 flex items-center gap-3 hidden">
+                        <svg id="svm-loading-indicator" class="animate-spin h-5 w-5 text-indigo-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                        <span id="svm-status-text" class="font-medium"></span>
+                    </div>
+                    <button id="run-experiment-button" class="btn btn-primary">Run Experiment</button>
+                </div>
+            </div>
+
+            <!-- Results Area -->
+            <div id="results-area" class="mt-12 hidden">
+                <h2 class="text-2xl font-bold text-white mb-6">Results</h2>
+                <div class="space-y-8">
+                    <!-- Plot -->
+                    <div>
+                        <h3 class="text-lg font-semibold text-indigo-400 mb-4">Decision Boundary Plot</h3>
+                        <div class="p-4 bg-slate-800 rounded-lg border border-slate-700 min-h-[300px] flex items-center justify-center">
+                            <img id="result-plot" src="" alt="Decision Boundary Plot" class="max-w-full h-auto rounded">
+                        </div>
+                    </div>
+                    <!-- Metrics -->
+                    <div>
+                        <h3 class="text-lg font-semibold text-indigo-400 mb-4">Performance Metrics</h3>
+                        <div class="p-4 bg-slate-950 rounded-lg border border-slate-700">
+                            <pre id="result-metrics" class="font-code text-sm text-slate-300"></pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- Error Display -->
+            <div id="svm-error-display" class="hidden mt-6 p-4 rounded-md bg-red-500/20 text-red-300 border border-red-500/30">
+                <h4 class="font-bold mb-2">An Error Occurred</h4>
+                <p id="svm-error-text" class="font-code text-sm"></p>
+            </div>
+        </div>
+    </main>
+
+    <main id="visualizer-page" class="flex-1 flex overflow-hidden hidden">
         <div id="cy-container" class="flex-1 relative">
             <div id="cy"></div>
             <!-- Initial Fetch Overlay -->
@@ -243,35 +346,66 @@
         // --- Globals ---
         let currentWorkflow = null;
         let pollingTimeoutId = null;
+        let svmPollingIntervalId = null;
+        const API_BASE_URL = 'http://localhost:3000';
+
 
         // --- DOM Elements ---
         const dom = {
             nav: {
+                svm: document.getElementById('nav-svm'),
                 visualizer: document.getElementById('nav-visualizer'),
                 submitter: document.getElementById('nav-submitter'),
             },
             pages: {
+                svm: document.getElementById('svm-page'),
                 visualizer: document.getElementById('visualizer-page'),
                 submitter: document.getElementById('qasm-submitter-page'),
             },
-            graphOverlay: document.getElementById('graph-overlay'),
-            fetchButton: document.getElementById('fetch-button'),
-            workflowInput: document.getElementById('workflow-input'),
-            namespaceInput: document.getElementById('namespace-input'),
-            workflowNameDisplay: document.getElementById('workflow-name-display'),
             pollingStatus: document.getElementById('polling-status'),
-            details: {
-                content: document.getElementById('details-content'),
-                placeholder: document.getElementById('details-placeholder'),
-                fetchPrompt: document.getElementById('details-fetch-prompt'),
-                data: document.getElementById('details-data'),
-                title: document.getElementById('details-title'),
-                status: document.getElementById('details-status'),
-                circuitTitle: document.getElementById('details-circuit-title'),
-                circuit: document.getElementById('details-circuit'),
-                params: document.getElementById('details-params'),
-                resultsBtnContainer: document.getElementById('results-button-container'),
+            // SVM Page Elements
+            svm: {
+                runButton: document.getElementById('run-experiment-button'),
+                statusDisplay: document.getElementById('svm-status-display'),
+                loadingIndicator: document.getElementById('svm-loading-indicator'),
+                statusText: document.getElementById('svm-status-text'),
+                resultsArea: document.getElementById('results-area'),
+                resultPlot: document.getElementById('result-plot'),
+                resultMetrics: document.getElementById('result-metrics'),
+                errorDisplay: document.getElementById('svm-error-display'),
+                errorText: document.getElementById('svm-error-text'),
+                inputs: {
+                    generator: document.getElementById('ds-generator'),
+                    samples: document.getElementById('ds-samples'),
+                    noise: document.getElementById('ds-noise'),
+                    test_size: document.getElementById('ds-test-size'),
+                    image: document.getElementById('kernel-image'),
+                    C: document.getElementById('trainer-c'),
+                    modelName: document.getElementById('output-model-name'),
+                    plotName: document.getElementById('output-plot-name'),
+                }
             },
+            // Visualizer Page Elements
+            visualizer: {
+                graphOverlay: document.getElementById('graph-overlay'),
+                fetchButton: document.getElementById('fetch-button'),
+                workflowInput: document.getElementById('workflow-input'),
+                namespaceInput: document.getElementById('namespace-input'),
+                workflowNameDisplay: document.getElementById('workflow-name-display'),
+                details: {
+                    content: document.getElementById('details-content'),
+                    placeholder: document.getElementById('details-placeholder'),
+                    fetchPrompt: document.getElementById('details-fetch-prompt'),
+                    data: document.getElementById('details-data'),
+                    title: document.getElementById('details-title'),
+                    status: document.getElementById('details-status'),
+                    circuitTitle: document.getElementById('details-circuit-title'),
+                    circuit: document.getElementById('details-circuit'),
+                    params: document.getElementById('details-params'),
+                    resultsBtnContainer: document.getElementById('results-button-container'),
+                }
+            },
+            // QASM Submitter Elements
             qasm: {
                 notification: document.getElementById('qasm-notification'),
                 nameInput: document.getElementById('qasm-workflow-name'),
@@ -279,6 +413,7 @@
                 input: document.getElementById('qasm-input'),
                 submitButton: document.getElementById('qasm-submit-button'),
             },
+            // Shared Modals
             errorModal: {
                 overlay: document.getElementById('error-modal-overlay'),
                 content: document.getElementById('error-modal-content'),
@@ -295,15 +430,15 @@
             }
         };
 
-        // --- Initial State ---
-        dom.details.fetchPrompt.classList.remove('hidden');
-
         // --- Page Navigation ---
         function showPage(pageName) {
             Object.values(dom.pages).forEach(p => p.classList.add('hidden'));
             Object.values(dom.nav).forEach(n => n.classList.remove('active'));
 
-            if (pageName === 'visualizer') {
+            if (pageName === 'svm') {
+                dom.pages.svm.classList.remove('hidden');
+                dom.nav.svm.classList.add('active');
+            } else if (pageName === 'visualizer') {
                 dom.pages.visualizer.classList.remove('hidden');
                 dom.nav.visualizer.classList.add('active');
             } else if (pageName === 'submitter') {
@@ -311,6 +446,10 @@
                 dom.nav.submitter.classList.add('active');
             }
         }
+
+        dom.nav.svm.addEventListener('click', () => showPage('svm'));
+        dom.nav.visualizer.addEventListener('click', () => showPage('visualizer'));
+        dom.nav.submitter.addEventListener('click', () => showPage('submitter'));
 
         // --- Modal Logic ---
         function showModal(modal, title, content) {
@@ -330,22 +469,7 @@
             });
         });
 
-
-        // --- Polling Logic ---
-        function stopPolling() {
-            if (pollingTimeoutId) clearTimeout(pollingTimeoutId);
-            pollingTimeoutId = null;
-            dom.pollingStatus.classList.add('hidden');
-        }
-
-        function startPolling() {
-            stopPolling();
-            dom.pollingStatus.classList.remove('hidden');
-            dom.pollingStatus.classList.add('flex');
-            pollingTimeoutId = setTimeout(() => handleFetchWorkflow(true), 5000);
-        }
-
-        // --- Cytoscape Setup ---
+        // --- Cytoscape (Visualizer) Setup ---
         const cy = cytoscape({
             container: document.getElementById('cy'),
             style: [
@@ -360,20 +484,33 @@
             layout: { name: 'dagre' }
         });
 
-        // --- API Calls ---
+        // --- Visualizer Logic ---
+        function stopVisualizerPolling() {
+            if (pollingTimeoutId) clearTimeout(pollingTimeoutId);
+            pollingTimeoutId = null;
+            dom.pollingStatus.classList.add('hidden');
+        }
+
+        function startVisualizerPolling() {
+            stopVisualizerPolling();
+            dom.pollingStatus.classList.remove('hidden');
+            dom.pollingStatus.classList.add('flex');
+            pollingTimeoutId = setTimeout(() => handleFetchWorkflow(true), 5000);
+        }
+
         async function handleFetchWorkflow(isPoll = false) {
-            const workflowName = dom.workflowInput.value.trim();
-            const namespace = dom.namespaceInput.value.trim();
+            const workflowName = dom.visualizer.workflowInput.value.trim();
+            const namespace = dom.visualizer.namespaceInput.value.trim();
             if (!workflowName || !namespace) return;
 
             if (!isPoll) {
-                stopPolling();
-                dom.fetchButton.textContent = "Fetching...";
-                dom.fetchButton.disabled = true;
-                dom.graphOverlay.classList.add('opacity-50');
+                stopVisualizerPolling();
+                dom.visualizer.fetchButton.textContent = "Fetching...";
+                dom.visualizer.fetchButton.disabled = true;
+                dom.visualizer.graphOverlay.classList.add('opacity-50');
             }
 
-            const apiUrl = `http://127.0.0.1:3000/api/workflows/${workflowName}?namespace=${namespace}`;
+            const apiUrl = `${API_BASE_URL}/api/workflows/${workflowName}?namespace=${namespace}`;
 
             try {
                 const response = await fetch(apiUrl);
@@ -384,134 +521,33 @@
                 const newWorkflowData = await response.json();
 
                 if (isPoll && currentWorkflow) {
-                    // If polling, just update the graph nodes instead of re-rendering
                     updateGraph(newWorkflowData);
                 } else {
-                    // Initial fetch, render the full graph
-                    dom.workflowNameDisplay.textContent = `${newWorkflowData.metadata.name} (in ${namespace})`;
-                    dom.graphOverlay.classList.add('opacity-0', 'pointer-events-none');
-                    dom.details.fetchPrompt.classList.add('hidden');
+                    dom.visualizer.workflowNameDisplay.textContent = `${newWorkflowData.metadata.name} (in ${namespace})`;
+                    dom.visualizer.graphOverlay.classList.add('opacity-0', 'pointer-events-none');
+                    dom.visualizer.details.fetchPrompt.classList.add('hidden');
                     resetDetailsPanel();
                     renderGraph(newWorkflowData);
                 }
 
-                currentWorkflow = newWorkflowData; // Always update to the latest version
-                startPolling();
+                currentWorkflow = newWorkflowData;
+                startVisualizerPolling();
 
             } catch (error) {
                 console.error("Failed to fetch workflow:", error);
-                stopPolling();
+                stopVisualizerPolling();
                 if (!isPoll) {
                     showModal(dom.errorModal, 'Connection Failed', `<p>Could not fetch the workflow. Ensure the backend is running and the workflow name/namespace are correct.</p><p class="font-code text-sm mt-4"><strong>URL:</strong> ${apiUrl}</p><p class="font-code text-sm mt-2"><strong>Error:</strong> ${error.message}</p>`);
                 }
             } finally {
                 if (!isPoll) {
-                    dom.fetchButton.textContent = "Fetch & Visualize";
-                    dom.fetchButton.disabled = false;
-                    dom.graphOverlay.classList.remove('opacity-50');
+                    dom.visualizer.fetchButton.textContent = "Fetch & Visualize";
+                    dom.visualizer.fetchButton.disabled = false;
+                    dom.visualizer.graphOverlay.classList.remove('opacity-50');
                 }
             }
         }
 
-        async function handleFetchResults(taskName) {
-            if (!currentWorkflow) return;
-            const { name, namespace } = currentWorkflow.metadata;
-            const apiUrl = `http://127.0.0.1:3000/api/workflows/${namespace}/${name}/tasks/${taskName}/results`;
-
-            try {
-                const response = await fetch(apiUrl);
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    throw new Error(`Server responded with ${response.status}. Message: ${errorText || 'No error message'}`);
-                }
-                const results = await response.json();
-
-                dom.resultsModal.title.textContent = `Results for: ${taskName}`;
-
-                let amplitudes = null;
-                if (Array.isArray(results) && results.length > 0) {
-                    const lastStep = results[results.length - 1];
-                    if (lastStep && lastStep.finalStateVector && Array.isArray(lastStep.finalStateVector.amplitudes)) {
-                        amplitudes = lastStep.finalStateVector.amplitudes;
-                    }
-                }
-
-                switchResultTabs(!!amplitudes);
-
-                if (amplitudes) {
-                    renderStateVectorVisualization(amplitudes);
-                } else {
-                    dom.resultsModal.log.textContent = JSON.stringify(results, null, 2);
-                }
-
-                dom.resultsModal.overlay.classList.add('visible');
-
-            } catch (error) {
-                console.error("Failed to fetch results:", error);
-                showModal(dom.errorModal, 'Failed to Fetch Results', `<p>Could not fetch results for task <strong>${taskName}</strong>.</p><p class="font-code text-sm mt-4"><strong>URL:</strong> ${apiUrl}</p><p class="font-code text-sm mt-2"><strong>Error:</strong> ${error.message}</p>`);
-            }
-        }
-
-        async function handleQasmSubmit() {
-            const name = dom.qasm.nameInput.value.trim();
-            const namespace = dom.qasm.namespaceInput.value.trim();
-            const qasm = dom.qasm.input.value.trim();
-
-            if (!name || !namespace || !qasm) {
-                showQasmNotification('Please fill in all fields.', 'error');
-                return;
-            }
-
-            dom.qasm.submitButton.textContent = 'Submitting...';
-            dom.qasm.submitButton.disabled = true;
-
-            const apiUrl = `http://127.0.0.1:3000/api/workflows/${namespace}/${name}/qasm`;
-
-            try {
-                const response = await fetch(apiUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'text/plain' },
-                    body: qasm
-                });
-
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    throw new Error(`Server responded with ${response.status}. Message: ${errorText}`);
-                }
-
-                const result = await response.json();
-                showQasmNotification(`Workflow "${result.metadata.name}" created successfully! Redirecting...`, 'success');
-
-                setTimeout(() => {
-                    dom.workflowInput.value = name;
-                    dom.namespaceInput.value = namespace;
-                    showPage('visualizer');
-                    handleFetchWorkflow(false);
-                    dom.qasm.notification.classList.add('hidden');
-                }, 2000);
-
-            } catch (error) {
-                showQasmNotification(`Error: ${error.message}`, 'error');
-            } finally {
-                dom.qasm.submitButton.textContent = 'Submit Workflow';
-                dom.qasm.submitButton.disabled = false;
-            }
-        }
-
-        function showQasmNotification(message, type = 'success') {
-            const notification = dom.qasm.notification;
-            notification.textContent = message;
-            notification.className = 'p-4 mb-4 rounded-md'; // Reset classes
-            if (type === 'success') {
-                notification.classList.add('bg-green-500/20', 'text-green-300');
-            } else {
-                notification.classList.add('bg-red-500/20', 'text-red-300');
-            }
-            notification.classList.remove('hidden');
-        }
-
-
-        // --- Rendering Logic ---
         function renderGraph(workflow) {
             const elements = [];
             const tasks = workflow.spec.tasks || [];
@@ -571,43 +607,97 @@
         }
 
         function resetDetailsPanel() {
-            dom.details.content.style.opacity = '0';
+            const details = dom.visualizer.details;
+            details.content.style.opacity = '0';
             setTimeout(() => {
-                dom.details.title.textContent = 'Select a Task';
-                dom.details.placeholder.classList.remove('hidden');
-                dom.details.data.classList.add('hidden');
+                details.title.textContent = 'Select a Task';
+                details.placeholder.classList.remove('hidden');
+                details.data.classList.add('hidden');
                 cy.elements().unselect();
-                dom.details.content.style.opacity = '1';
+                details.content.style.opacity = '1';
             }, 150);
         }
 
         function displayTaskDetails(node) {
+            const details = dom.visualizer.details;
             const task = node.data('rawData');
             const status = node.data('status');
 
-            dom.details.content.style.opacity = '0';
+            details.content.style.opacity = '0';
 
             setTimeout(() => {
-                dom.details.placeholder.classList.add('hidden');
-                dom.details.data.classList.remove('hidden');
-                dom.details.title.textContent = task.name;
-                dom.details.status.textContent = status.charAt(0).toUpperCase() + status.slice(1);
+                details.placeholder.classList.add('hidden');
+                details.data.classList.remove('hidden');
+                details.title.textContent = task.name;
+                details.status.textContent = status.charAt(0).toUpperCase() + status.slice(1);
 
                 const isQuantum = task.quantum;
-                dom.details.circuitTitle.textContent = isQuantum ? "Quantum Circuit (OpenQASM)" : "Classical Command";
-                dom.details.circuit.textContent = isQuantum ? task.quantum.circuit : (task.classical?.command || 'N/A');
-                dom.details.params.textContent = JSON.stringify(isQuantum ? task.quantum.params : (task.classical?.params || {}), null, 2);
+                details.circuitTitle.textContent = isQuantum ? "Quantum Circuit (OpenQASM)" : "Classical Command";
+                details.circuit.textContent = isQuantum ? task.quantum.circuit : (task.classical?.command || 'N/A');
+                details.params.textContent = JSON.stringify(isQuantum ? task.quantum.params : (task.classical?.params || {}), null, 2);
 
-                dom.details.resultsBtnContainer.innerHTML = '';
+                details.resultsBtnContainer.innerHTML = '';
                 if (status === 'succeeded') {
                     const button = document.createElement('button');
                     button.textContent = 'View Results';
                     button.className = 'btn btn-success w-full';
                     button.onclick = () => handleFetchResults(task.name);
-                    dom.details.resultsBtnContainer.appendChild(button);
+                    details.resultsBtnContainer.appendChild(button);
                 }
-                dom.details.content.style.opacity = '1';
+                details.content.style.opacity = '1';
             }, 150);
+        }
+
+        async function handleFetchResults(taskName) {
+            if (!currentWorkflow) return;
+            const { name, namespace } = currentWorkflow.metadata;
+            const apiUrl = `${API_BASE_URL}/api/workflows/${namespace}/${name}/tasks/${taskName}/results`;
+
+            try {
+                const response = await fetch(apiUrl);
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`Server responded with ${response.status}. Message: ${errorText || 'No error message'}`);
+                }
+                const results = await response.json();
+
+                dom.resultsModal.title.textContent = `Results for: ${taskName}`;
+
+                let amplitudes = null;
+                if (Array.isArray(results) && results.length > 0) {
+                    const lastStep = results[results.length - 1];
+                    if (lastStep && lastStep.finalStateVector && Array.isArray(lastStep.finalStateVector.amplitudes)) {
+                        amplitudes = lastStep.finalStateVector.amplitudes;
+                    }
+                }
+
+                switchResultTabs(!!amplitudes);
+
+                if (amplitudes) {
+                    renderStateVectorVisualization(amplitudes);
+                } else {
+                    dom.resultsModal.log.textContent = JSON.stringify(results, null, 2);
+                }
+
+                dom.resultsModal.overlay.classList.add('visible');
+
+            } catch (error) {
+                console.error("Failed to fetch results:", error);
+                showModal(dom.errorModal, 'Failed to Fetch Results', `<p>Could not fetch results for task <strong>${taskName}</strong>.</p><p class="font-code text-sm mt-4"><strong>URL:</strong> ${apiUrl}</p><p class="font-code text-sm mt-2"><strong>Error:</strong> ${error.message}</p>`);
+            }
+        }
+
+        function switchResultTabs(showVis) {
+            const activeClasses = ['border-indigo-500', 'text-indigo-400'];
+            const inactiveClasses = ['border-transparent', 'text-slate-400', 'hover:text-slate-300', 'hover:border-slate-400'];
+
+            dom.resultsModal.tabVis.classList.remove(...(showVis ? inactiveClasses : activeClasses));
+            dom.resultsModal.tabVis.classList.add(...(showVis ? activeClasses : inactiveClasses));
+            dom.resultsModal.tabLog.classList.remove(...(!showVis ? inactiveClasses : activeClasses));
+            dom.resultsModal.tabLog.classList.add(...(!showVis ? activeClasses : inactiveClasses));
+
+            dom.resultsModal.visContainer.classList.toggle('hidden', !showVis);
+            dom.resultsModal.logContainer.classList.toggle('hidden', showVis);
         }
 
         function renderStateVectorVisualization(amplitudes) {
@@ -668,35 +758,201 @@
                 .append("title").text(d => `State: |${d.state.toString(2).padStart(numQubits, '0')}⟩\nProbability: ${(d.probability * 100).toFixed(3)}%`);
         }
 
-        function switchResultTabs(showVis) {
-            const activeClasses = ['border-indigo-500', 'text-indigo-400'];
-            const inactiveClasses = ['border-transparent', 'text-slate-400', 'hover:text-slate-300', 'hover:border-slate-400'];
-
-            dom.resultsModal.tabVis.classList.remove(...(showVis ? inactiveClasses : activeClasses));
-            dom.resultsModal.tabVis.classList.add(...(showVis ? activeClasses : inactiveClasses));
-            dom.resultsModal.tabLog.classList.remove(...(!showVis ? inactiveClasses : activeClasses));
-            dom.resultsModal.tabLog.classList.add(...(!showVis ? activeClasses : inactiveClasses));
-
-            dom.resultsModal.visContainer.classList.toggle('hidden', !showVis);
-            dom.resultsModal.logContainer.classList.toggle('hidden', showVis);
-        }
-
-        // --- Event Listeners ---
-        dom.fetchButton.addEventListener('click', () => handleFetchWorkflow(false));
-        dom.workflowInput.addEventListener('keyup', (e) => { if (e.key === 'Enter') handleFetchWorkflow(false); });
-        dom.namespaceInput.addEventListener('keyup', (e) => { if (e.key === 'Enter') handleFetchWorkflow(false); });
+        dom.visualizer.fetchButton.addEventListener('click', () => handleFetchWorkflow(false));
+        dom.visualizer.workflowInput.addEventListener('keyup', (e) => { if (e.key === 'Enter') handleFetchWorkflow(false); });
+        dom.visualizer.namespaceInput.addEventListener('keyup', (e) => { if (e.key === 'Enter') handleFetchWorkflow(false); });
         cy.on('tap', 'node', (evt) => displayTaskDetails(evt.target));
         cy.on('tap', (evt) => {
             if (evt.target === cy) resetDetailsPanel();
         });
-
         dom.resultsModal.tabVis.addEventListener('click', (e) => { e.preventDefault(); switchResultTabs(true); });
         dom.resultsModal.tabLog.addEventListener('click', (e) => { e.preventDefault(); switchResultTabs(false); });
 
-        dom.nav.visualizer.addEventListener('click', (e) => { e.preventDefault(); showPage('visualizer'); });
-        dom.nav.submitter.addEventListener('click', (e) => { e.preventDefault(); showPage('submitter'); });
+
+        // --- SVM Experiment Logic ---
+        function stopSvmPolling() {
+            if (svmPollingIntervalId) clearInterval(svmPollingIntervalId);
+            svmPollingIntervalId = null;
+        }
+
+        function startSvmPolling(workflowName) {
+            stopSvmPolling();
+            updateSvmStatus(`Workflow submitted. Now polling for status...`);
+            dom.svm.loadingIndicator.classList.remove('hidden');
+
+            svmPollingIntervalId = setInterval(() => {
+                fetchSvmStatus(workflowName);
+            }, 3000);
+        }
+
+        function updateSvmStatus(message, showLoading = true) {
+            dom.svm.statusDisplay.classList.remove('hidden');
+            dom.svm.statusText.textContent = message;
+            dom.svm.loadingIndicator.style.display = showLoading ? 'block' : 'none';
+        }
+
+        function resetSvmUI() {
+            dom.svm.runButton.disabled = false;
+            dom.svm.statusDisplay.classList.add('hidden');
+            dom.svm.resultsArea.classList.add('hidden');
+            dom.svm.errorDisplay.classList.add('hidden');
+            stopSvmPolling();
+        }
+
+        function displaySvmResults(plotData, metrics) {
+            updateSvmStatus('Completed', false);
+            dom.svm.runButton.disabled = false;
+            dom.svm.resultsArea.classList.remove('hidden');
+            dom.svm.resultPlot.src = `data:image/png;base64,${plotData}`;
+            dom.svm.resultMetrics.textContent = metrics;
+        }
+
+        function displaySvmError(errorMessage) {
+            stopSvmPolling();
+            updateSvmStatus('Failed', false);
+            dom.svm.runButton.disabled = false;
+            dom.svm.errorDisplay.classList.remove('hidden');
+            dom.svm.errorText.textContent = errorMessage;
+        }
+
+        async function handleRunExperiment() {
+            resetSvmUI();
+            dom.svm.runButton.disabled = true;
+            updateSvmStatus('Submitting workflow...');
+
+            const spec = {
+                dataset: {
+                    generator: dom.svm.inputs.generator.value,
+                    samples: parseInt(dom.svm.inputs.samples.value, 10),
+                    noise: parseFloat(dom.svm.inputs.noise.value),
+                    test_size: parseFloat(dom.svm.inputs.test_size.value),
+                },
+                kernel: {
+                    image: dom.svm.inputs.image.value,
+                },
+                trainer: {
+                    C: parseFloat(dom.svm.inputs.C.value),
+                },
+                output: {
+                    modelName: dom.svm.inputs.modelName.value,
+                    plotName: dom.svm.inputs.plotName.value,
+                }
+            };
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/run_experiment`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(spec)
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`Server responded with ${response.status}: ${errorText}`);
+                }
+
+                const result = await response.json();
+                const workflowName = result.workflow_name;
+                if (!workflowName) {
+                    throw new Error('Backend did not return a workflow_name.');
+                }
+                startSvmPolling(workflowName);
+
+            } catch (error) {
+                console.error('Failed to run experiment:', error);
+                displaySvmError(error.message);
+            }
+        }
+
+        async function fetchSvmStatus(workflowName) {
+            const apiUrl = `${API_BASE_URL}/get_status/${workflowName}`;
+            try {
+                const response = await fetch(apiUrl);
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`Status check failed with ${response.status}: ${errorText}`);
+                }
+                const data = await response.json();
+
+                updateSvmStatus(`Phase: ${data.status}`);
+
+                if (data.status === 'Completed') {
+                    stopSvmPolling();
+                    displaySvmResults(data.plot, data.metrics);
+                } else if (data.status === 'Failed') {
+                    stopSvmPolling();
+                    displaySvmError(data.message || 'The workflow failed without a specific message.');
+                }
+            } catch (error) {
+                console.error('Failed to fetch status:', error);
+                displaySvmError(`Could not poll for status. ${error.message}`);
+                stopSvmPolling();
+            }
+        }
+
+        dom.svm.runButton.addEventListener('click', handleRunExperiment);
+
+        // --- QASM Submitter Logic ---
+        async function handleQasmSubmit() {
+            const name = dom.qasm.nameInput.value.trim();
+            const namespace = dom.qasm.namespaceInput.value.trim();
+            const qasm = dom.qasm.input.value.trim();
+
+            if (!name || !namespace || !qasm) {
+                showQasmNotification('Please fill in all fields.', 'error');
+                return;
+            }
+
+            dom.qasm.submitButton.textContent = 'Submitting...';
+            dom.qasm.submitButton.disabled = true;
+
+            const apiUrl = `${API_BASE_URL}/api/workflows/${namespace}/${name}/qasm`;
+
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain' },
+                    body: qasm
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`Server responded with ${response.status}. Message: ${errorText}`);
+                }
+
+                const result = await response.json();
+                showQasmNotification(`Workflow "${result.metadata.name}" created successfully! Switching to visualizer...`, 'success');
+
+                setTimeout(() => {
+                    dom.visualizer.workflowInput.value = name;
+                    dom.visualizer.namespaceInput.value = namespace;
+                    showPage('visualizer');
+                    handleFetchWorkflow(false);
+                    dom.qasm.notification.classList.add('hidden');
+                }, 2000);
+
+            } catch (error) {
+                showQasmNotification(`Error: ${error.message}`, 'error');
+            } finally {
+                dom.qasm.submitButton.textContent = 'Submit Workflow';
+                dom.qasm.submitButton.disabled = false;
+            }
+        }
+
+        function showQasmNotification(message, type = 'success') {
+            const notification = dom.qasm.notification;
+            notification.textContent = message;
+            notification.className = 'p-4 mb-4 rounded-md'; // Reset classes
+            if (type === 'success') {
+                notification.classList.add('bg-green-500/20', 'text-green-300');
+            } else {
+                notification.classList.add('bg-red-500/20', 'text-red-300');
+            }
+            notification.classList.remove('hidden');
+        }
 
         dom.qasm.submitButton.addEventListener('click', handleQasmSubmit);
+
     });
 </script>
 </body>
