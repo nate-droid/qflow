@@ -99,6 +99,29 @@ where
     }
 }
 
+/// Trait defining the VQE workflow interface.
+pub trait Vqe {
+    fn cost_function(&self, params: &[f64]) -> f64;
+    fn gradient(&self, params: &[f64]) -> Vec<f64>;
+    fn run(&self, initial_params: Vec<f64>, steps: usize, learning_rate: f64) -> (f64, Vec<f64>);
+}
+
+impl<S, F> Vqe for VqeRunner<S, F>
+where
+    S: Simulator,
+    F: Fn(&mut S, &[f64]) + Copy,
+{
+    fn cost_function(&self, params: &[f64]) -> f64 {
+        self.cost_function(params)
+    }
+    fn gradient(&self, params: &[f64]) -> Vec<f64> {
+        self.gradient(params)
+    }
+    fn run(&self, initial_params: Vec<f64>, steps: usize, learning_rate: f64) -> (f64, Vec<f64>) {
+        self.run(initial_params, steps, learning_rate)
+    }
+}
+
 // --- Main Application: H2 Molecule Dissociation Curve ---
 
 /// A hardware-efficient ansatz for two qubits.
