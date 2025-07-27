@@ -228,97 +228,8 @@ where
 
 #[cfg(test)]
 mod tests {
+    use qsim::QuantumSimulator;
     use super::*;
-
-    /// A mock simulator that implements the qsim::Simulator trait for testing.
-    struct MockSimulator {
-        num_qubits: usize,
-        statevector: StateVector,
-        gate_log: Vec<Gate>,
-    }
-
-    impl MockSimulator {
-        fn new(num_qubits: usize) -> Self {
-            let dim = 1 << num_qubits;
-            let mut sv_vec = vec![Complex::new(0.0, 0.0); dim];
-            sv_vec[0] = Complex::new(1.0, 0.0);
-            Self {
-                num_qubits,
-                statevector: StateVector::from(sv_vec),
-                gate_log: Vec::new(),
-            }
-        }
-    }
-
-    impl Simulator for MockSimulator {
-        fn reset(&mut self) {
-            let dim = 1 << self.num_qubits;
-            let mut sv_vec = vec![Complex::new(0.0, 0.0); dim];
-            sv_vec[0] = Complex::new(1.0, 0.0);
-            self.statevector = StateVector::from(sv_vec);
-            self.gate_log.clear();
-        }
-
-        fn apply_gate(&mut self, gate: &Gate) {
-            self.gate_log.push(gate.clone());
-            let sv = self.statevector.as_mut_slice();
-            match gate {
-                Gate::RY(q, angle) => {
-                    let c = (angle / 2.0).cos();
-                    let s = (angle / 2.0).sin();
-                    let step = 1 << (q + 1);
-                    let half_step = 1 << *q;
-                    for i in (0..sv.len()).step_by(step) {
-                        for j in 0..half_step {
-                            let i0 = i + j;
-                            let i1 = i + j + half_step;
-                            let old_0 = sv[i0];
-                            let old_1 = sv[i1];
-                            sv[i0] = c * old_0 - s * old_1;
-                            sv[i1] = s * old_0 + c * old_1;
-                        }
-                    }
-                },
-                Gate::H(q) => {
-                    let inv_sqrt2 = 1.0 / (2.0_f64).sqrt();
-                    let step = 1 << (q + 1);
-                    let half_step = 1 << *q;
-                    for i in (0..sv.len()).step_by(step) {
-                        for j in 0..half_step {
-                            let i0 = i + j;
-                            let i1 = i + j + half_step;
-                            let old_0 = sv[i0];
-                            let old_1 = sv[i1];
-                            sv[i0] = inv_sqrt2 * (old_0 + old_1);
-                            sv[i1] = inv_sqrt2 * (old_0 - old_1);
-                        }
-                    }
-                },
-                Gate::CX(c, t) => {
-                    let control_mask = 1 << *c;
-                    let target_mask = 1 << *t;
-                    for i in 0..sv.len() {
-                        if (i & control_mask) != 0 && (i & target_mask) == 0 {
-                            sv.swap(i, i | target_mask);
-                        }
-                    }
-                },
-                _ => unimplemented!("Mock gate not implemented for this test."),
-            }
-        }
-
-        fn get_statevector(&self) -> &StateVector {
-            &self.statevector
-        }
-
-        fn get_num_qubits(&self) -> usize {
-            self.num_qubits
-        }
-
-        fn measure_pauli_string_expectation(&mut self, _operators: Vec<Gate>) -> f64 {
-            0.0
-        }
-    }
 
     fn simple_ry_ansatz(sim: &mut impl Simulator, params: &[f64]) {
         sim.apply_gate(&Gate::RY(0, params[0]));
@@ -335,7 +246,7 @@ mod tests {
         let target_angle = (0.75_f64).sqrt().asin() * 2.0;
         let training_data = vec!["1".to_string(), "1".to_string(), "1".to_string(), "0".to_string()];
 
-        let mock_sim = MockSimulator::new(1);
+        let mock_sim = QuantumSimulator::new(1);
         let qcbm_runner = QcbmRunner::new(mock_sim, simple_ry_ansatz, &training_data);
         let mut params = vec![0.1];
         let mut optimizer = AdamOptimizer::new(params.len(), 0.02);
@@ -352,7 +263,7 @@ mod tests {
     fn test_qcbm_learns_entangled_state_with_adam_and_mmd() {
         let training_data = vec!["00".to_string(), "11".to_string(), "00".to_string(), "11".to_string()];
 
-        let mock_sim = MockSimulator::new(2);
+        let mock_sim = QuantumSimulator::new(2);
         let qcbm_runner = QcbmRunner::new(mock_sim, entangling_ansatz, &training_data);
         let mut params = vec![0.2];
         let mut optimizer = AdamOptimizer::new(params.len(), 0.01);
