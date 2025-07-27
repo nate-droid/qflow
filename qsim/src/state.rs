@@ -13,6 +13,12 @@ pub struct StateVector {
 }
 
 impl StateVector {
+    pub fn as_mut_slice(&mut self) -> &mut [Complex<f64>] {
+        self.amplitudes.as_mut_slice()
+    }
+}
+
+impl StateVector {
     pub fn new(num_qubits: usize) -> Self {
         let size = 1 << num_qubits; // 2^num_qubits
         let mut amplitudes = vec![Complex::new(0.0, 0.0); size];
@@ -128,6 +134,15 @@ impl StateVector {
         }
         if !self.amplitudes.is_empty() {
             self.amplitudes[0] = Complex::new(1.0, 0.0);
+        }
+    }
+}
+
+impl From<Vec<Complex<f64>>> for StateVector {
+    fn from(vec: Vec<Complex<f64>>) -> Self {
+        StateVector {
+            num_qubits: 0,
+            amplitudes: vec,
         }
     }
 }

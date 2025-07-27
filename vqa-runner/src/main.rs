@@ -1,3 +1,5 @@
+mod qcbm;
+
 use hamiltonian::{Hamiltonian, PauliTerm};
 use std::cell::RefCell;
 use qsim::{Gate, QuantumSimulator as StatevectorSimulator};

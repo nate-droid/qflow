@@ -16,6 +16,7 @@ pub trait Simulator {
     /// calculating ⟨ψ|P|ψ⟩.
     fn measure_pauli_string_expectation(&mut self, operators: Vec<Gate>) -> f64;
     fn get_statevector(&self) -> &StateVector;
+    fn get_num_qubits(&self) -> usize;
 }
 
 pub trait QuantumGate {
@@ -88,6 +89,10 @@ impl Simulator for QuantumSimulator {
 
     fn get_statevector(&self) -> &StateVector {
         &self.state
+    }
+
+    fn get_num_qubits(&self) -> usize {
+        self.num_qubits
     }
 }
 
