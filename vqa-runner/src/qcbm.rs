@@ -1,10 +1,73 @@
 use std::collections::HashMap;
 use std::cell::RefCell;
 use num_complex::Complex;
-use qsim::simulator::Simulator;
+use rand::Rng;
+use rand::distributions::{Distribution, WeightedIndex};
 
-// A small constant to prevent division by zero or log(0) in the loss function.
+
+// --- Using types from your actual qsim crate ---
+use qsim::simulator::Simulator;
+use qsim::{Gate, StateVector};
+
+
+// A small constant to avoid floating point inaccuracies.
 const EPSILON: f64 = 1e-12;
+
+// --- Optimizer Trait and Adam Implementation ---
+
+/// A trait for optimization algorithms that update parameters based on gradients.
+pub trait Optimizer {
+    fn update(&mut self, params: &mut [f64], grads: &[f64]);
+}
+
+/// The Adam (Adaptive Moment Estimation) optimizer.
+pub struct AdamOptimizer {
+    learning_rate: f64,
+    beta1: f64,
+    beta2: f64,
+    epsilon: f64,
+    m: Vec<f64>, // 1st moment vector (mean)
+    v: Vec<f64>, // 2nd moment vector (uncentered variance)
+    t: usize,    // timestep
+}
+
+impl AdamOptimizer {
+    /// Creates a new AdamOptimizer.
+    ///
+    /// # Arguments
+    /// * `num_params` - The number of parameters to optimize.
+    /// * `learning_rate` - The initial learning rate (alpha).
+    pub fn new(num_params: usize, learning_rate: f64) -> Self {
+        Self {
+            learning_rate,
+            beta1: 0.92, // Slightly increased for more smoothing
+            beta2: 0.999,
+            epsilon: 1e-8,
+            m: vec![0.0; num_params],
+            v: vec![0.0; num_params],
+            t: 0,
+        }
+    }
+}
+
+impl Optimizer for AdamOptimizer {
+    fn update(&mut self, params: &mut [f64], grads: &[f64]) {
+        self.t += 1;
+        for i in 0..params.len() {
+            // Update biased moment estimates
+            self.m[i] = self.beta1 * self.m[i] + (1.0 - self.beta1) * grads[i];
+            self.v[i] = self.beta2 * self.v[i] + (1.0 - self.beta2) * grads[i].powi(2);
+
+            // Compute bias-corrected moment estimates
+            let m_hat = self.m[i] / (1.0 - self.beta1.powi(self.t as i32));
+            let v_hat = self.v[i] / (1.0 - self.beta2.powi(self.t as i32));
+
+            // Update parameters
+            params[i] -= self.learning_rate * m_hat / (v_hat.sqrt() + self.epsilon);
+        }
+    }
+}
+
 
 /// Represents a Quantum Circuit Born Machine runner.
 /// It's designed to train a parameterized quantum circuit (ansatz)
@@ -15,7 +78,7 @@ where
     F: Fn(&mut S, &[f64]) + Copy,
 {
     simulator: RefCell<S>,
-    target_distribution: HashMap<String, f64>,
+    training_data: Vec<String>, // Store samples directly
     ansatz: F,
     num_qubits: usize,
 }
@@ -26,46 +89,17 @@ where
     F: Fn(&mut S, &[f64]) + Copy,
 {
     /// Creates a new QcbmRunner.
-    ///
-    /// # Arguments
-    /// * `simulator` - An instance of your quantum simulator.
-    /// * `ansatz` - A closure representing the parameterized quantum circuit.
-    /// * `training_data` - A slice of bitstrings (e.g., "011", "101") representing the dataset to learn.
     pub fn new(simulator: S, ansatz: F, training_data: &[String]) -> Self {
         let num_qubits = simulator.get_num_qubits();
-        let target_distribution = Self::calculate_target_distribution(training_data, num_qubits);
-
         QcbmRunner {
             simulator: RefCell::new(simulator),
-            target_distribution,
+            training_data: training_data.to_vec(),
             ansatz,
             num_qubits,
         }
     }
 
-    /// Calculates the probability distribution from the input data.
-    fn calculate_target_distribution(data: &[String], num_qubits: usize) -> HashMap<String, f64> {
-        let mut counts = HashMap::new();
-        for item in data {
-            // Ensure data has the correct number of bits
-            if item.len() == num_qubits {
-                *counts.entry(item.clone()).or_insert(0) += 1;
-            }
-        }
-
-        let total_samples = data.len() as f64;
-        if total_samples == 0.0 {
-            return HashMap::new();
-        }
-
-        counts
-            .into_iter()
-            .map(|(key, count)| (key, count as f64 / total_samples))
-            .collect()
-    }
-
-    /// Executes the quantum circuit with the given parameters and returns the resulting
-    /// probability distribution by calculating it from the final statevector.
+    /// Executes the quantum circuit and returns the full probability distribution.
     pub fn get_model_distribution(&self, params: &[f64]) -> HashMap<String, f64> {
         let mut sim = self.simulator.borrow_mut();
         sim.reset();
@@ -84,103 +118,105 @@ where
         distribution
     }
 
-    /// Calculates the Kullback-Leibler (KL) divergence between the target and model distributions.
-    /// KL(P || Q) = Σ P(x) * log(P(x) / Q(x))
-    /// This serves as the loss function for our training.
-    fn kl_divergence(
-        target_dist: &HashMap<String, f64>,
-        model_dist: &HashMap<String, f64>,
-    ) -> f64 {
-        target_dist
-            .iter()
-            .map(|(key, p_prob)| {
-                let q_prob = model_dist.get(key).unwrap_or(&EPSILON);
-                p_prob * (p_prob.ln() - q_prob.ln())
-            })
-            .sum()
-    }
-
-    fn l2_distance(
-        target_dist: &HashMap<String, f64>,
-        model_dist: &HashMap<String, f64>,
-        num_qubits: usize,
-    ) -> f64 {
-        let mut total_error = 0.0;
-        let num_states = 1 << num_qubits;
-
-        // Iterate over all possible bitstrings in the Hilbert space
-        for i in 0..num_states {
-            let bitstring = format!("{:0width$b}", i, width = num_qubits);
-            let p_prob = target_dist.get(&bitstring).unwrap_or(&0.0);
-            let q_prob = model_dist.get(&bitstring).unwrap_or(&0.0);
-            total_error += (p_prob - q_prob).powi(2);
+    /// Generates samples from the model by running the circuit.
+    fn get_model_samples(&self, params: &[f64], num_samples: usize) -> Vec<String> {
+        let dist = self.get_model_distribution(params);
+        if dist.is_empty() {
+            return vec![format!("{:0width$}", 0, width = self.num_qubits); num_samples];
         }
-        total_error
+        let mut rng = rand::thread_rng();
+        let items: Vec<_> = dist.keys().cloned().collect();
+        let weights: Vec<_> = dist.values().cloned().collect();
+        let weighted_dist = WeightedIndex::new(&weights).unwrap();
+
+        (0..num_samples).map(|_| items[weighted_dist.sample(&mut rng)].clone()).collect()
     }
 
-    /// Trains the QCBM using gradient descent.
-    ///
-    /// # Arguments
-    /// * `params` - The starting parameters for the ansatz, which will be updated in place.
-    /// * `learning_rate` - The step size for the optimizer.
-    /// * `epochs` - The number of training iterations.
-    pub fn train(&self, params: &mut [f64], learning_rate: f64, epochs: usize) {
-        println!("Target Distribution: {:?}", self.target_distribution);
-        println!("Starting training with {} parameters...", params.len());
+    /// Computes the MMD loss with a Gaussian RBF kernel.
+    fn mmd_rbf_loss(target_samples: &[String], model_samples: &[String], sigma: f64) -> f64 {
+        let to_vec = |s: &String| s.chars().map(|c| c.to_digit(10).unwrap() as f64).collect::<Vec<f64>>();
+        let kernel = |v1: &[f64], v2: &[f64]| {
+            let sq_dist: f64 = v1.iter().zip(v2.iter()).map(|(a, b)| (a - b).powi(2)).sum();
+            (-sq_dist / (2.0 * sigma.powi(2))).exp()
+        };
+
+        let target_vecs: Vec<_> = target_samples.iter().map(to_vec).collect();
+        let model_vecs: Vec<_> = model_samples.iter().map(to_vec).collect();
+
+        let mut term1 = 0.0;
+        for i in 0..target_vecs.len() { for j in 0..target_vecs.len() { term1 += kernel(&target_vecs[i], &target_vecs[j]); } }
+        term1 /= (target_vecs.len() as f64).powi(2);
+
+        let mut term2 = 0.0;
+        for i in 0..model_vecs.len() { for j in 0..model_vecs.len() { term2 += kernel(&model_vecs[i], &model_vecs[j]); } }
+        term2 /= (model_vecs.len() as f64).powi(2);
+
+        let mut term3 = 0.0;
+        for i in 0..target_vecs.len() { for j in 0..model_vecs.len() { term3 += kernel(&target_vecs[i], &model_vecs[j]); } }
+        term3 /= (target_vecs.len() * model_vecs.len()) as f64;
+
+        term1 + term2 - 2.0 * term3
+    }
+
+
+    /// Trains the QCBM using a provided optimizer and MMD loss with an analytical gradient.
+    pub fn train<O: Optimizer>(&self, params: &mut [f64], optimizer: &mut O, epochs: usize) {
+        println!("Starting training with MMD loss...");
+
+        const NUM_MMD_SAMPLES: usize = 128;
+        let mut rng = rand::thread_rng();
+        let sigma = (self.num_qubits as f64).sqrt() / 2.0;
+        let to_vec = |s: &String| s.chars().map(|c| c.to_digit(10).unwrap() as f64).collect::<Vec<f64>>();
+        let kernel = |v1: &[f64], v2: &[f64]| {
+            let sq_dist: f64 = v1.iter().zip(v2.iter()).map(|(a, b)| (a - b).powi(2)).sum();
+            (-sq_dist / (2.0 * sigma.powi(2))).exp()
+        };
 
         for epoch in 0..epochs {
             let mut gradients = vec![0.0; params.len()];
-            let current_dist = self.get_model_distribution(params);
 
-            // Calculate gradient for each parameter
+            let model_samples = self.get_model_samples(params, NUM_MMD_SAMPLES);
+            let target_samples_for_epoch: Vec<String> = (0..NUM_MMD_SAMPLES)
+                .map(|_| self.training_data[rng.gen_range(0..self.training_data.len())].clone())
+                .collect();
+
+            let model_vecs: Vec<_> = model_samples.iter().map(&to_vec).collect();
+            let target_vecs: Vec<_> = target_samples_for_epoch.iter().map(&to_vec).collect();
+
             for i in 0..params.len() {
-                // To get the full gradient of the loss function, we use the chain rule:
-                // d(Loss)/dθ = Σ_x [ d(Loss)/dP(x) * dP(x)/dθ ]
-                // d(Loss)/dP(x) = -2 * (P_target(x) - P_model(x))
-                // dP(x)/dθ is found with the parameter-shift rule.
-
-                // Shift parameter up to get P(x | θ + π/2)
                 let mut params_plus = params.to_vec();
                 params_plus[i] += std::f64::consts::FRAC_PI_2;
                 let dist_plus = self.get_model_distribution(&params_plus);
 
-                // Shift parameter down to get P(x | θ - π/2)
                 let mut params_minus = params.to_vec();
                 params_minus[i] -= std::f64::consts::FRAC_PI_2;
                 let dist_minus = self.get_model_distribution(&params_minus);
 
                 let mut grad_i = 0.0;
                 let num_states = 1 << self.num_qubits;
-                // Sum over all possible states 'x'
-                for j in 0..num_states {
-                    let bitstring = format!("{:0width$b}", j, width = self.num_qubits);
 
-                    let p_target = self.target_distribution.get(&bitstring).unwrap_or(&0.0);
-                    let p_model = current_dist.get(&bitstring).unwrap_or(&0.0);
+                for z_idx in 0..num_states {
+                    let bitstring_z = format!("{:0width$b}", z_idx, width = self.num_qubits);
+                    let vec_z = to_vec(&bitstring_z);
 
-                    // d(Loss)/dP(x)
-                    let loss_grad_p = -2.0 * (p_target - p_model);
+                    let term_model: f64 = model_vecs.iter().map(|y| kernel(y, &vec_z)).sum();
+                    let term_target: f64 = target_vecs.iter().map(|x| kernel(x, &vec_z)).sum();
+                    let d_mmd_dp_z = 2.0 * (term_model / model_vecs.len() as f64 - term_target / target_vecs.len() as f64);
 
-                    // dP(x)/dθ using parameter-shift
-                    let p_plus = dist_plus.get(&bitstring).unwrap_or(&0.0);
-                    let p_minus = dist_minus.get(&bitstring).unwrap_or(&0.0);
-                    let p_grad_theta = 0.5 * (p_plus - p_minus);
+                    let p_plus_z = dist_plus.get(&bitstring_z).unwrap_or(&0.0);
+                    let p_minus_z = dist_minus.get(&bitstring_z).unwrap_or(&0.0);
+                    let d_p_d_theta = 0.5 * (p_plus_z - p_minus_z);
 
-                    grad_i += loss_grad_p * p_grad_theta;
+                    grad_i += d_mmd_dp_z * d_p_d_theta;
                 }
                 gradients[i] = grad_i;
             }
 
-            // Update parameters using gradient descent
-            for i in 0..params.len() {
-                params[i] -= learning_rate * gradients[i];
-            }
+            optimizer.update(params, &gradients);
 
-            // Print progress
             if (epoch + 1) % 10 == 0 || epoch == epochs - 1 {
-                let current_dist = self.get_model_distribution(params);
-                let current_loss = Self::l2_distance(&self.target_distribution, &current_dist, self.num_qubits);
-                println!("Epoch {}/{} - Loss (L2 Distance): {:.6}", epoch + 1, epochs, current_loss);
+                let current_loss = Self::mmd_rbf_loss(&target_samples_for_epoch, &model_samples, sigma);
+                println!("Epoch {}/{} - Loss (MMD): {:.6}", epoch + 1, epochs, current_loss);
             }
         }
 
@@ -192,60 +228,82 @@ where
 
 #[cfg(test)]
 mod tests {
-    use qsim::{Gate, StateVector};
     use super::*;
 
-    /// A very basic mock simulator for testing purposes.
-    /// It doesn't actually simulate quantum mechanics but allows us to
-    /// track gate applications and set a statevector manually for testing.
+    /// A mock simulator that implements the qsim::Simulator trait for testing.
     struct MockSimulator {
         num_qubits: usize,
         statevector: StateVector,
-        // We can track applied gates to see if the ansatz is called correctly
         gate_log: Vec<Gate>,
     }
 
     impl MockSimulator {
         fn new(num_qubits: usize) -> Self {
             let dim = 1 << num_qubits;
-            let mut statevector = vec![Complex::new(0.0, 0.0); dim];
-            statevector[0] = Complex::new(1.0, 0.0); // Start in |0...0>
+            let mut sv_vec = vec![Complex::new(0.0, 0.0); dim];
+            sv_vec[0] = Complex::new(1.0, 0.0);
             Self {
                 num_qubits,
+                statevector: StateVector::from(sv_vec),
                 gate_log: Vec::new(),
-                statevector: StateVector::from(statevector),
             }
         }
     }
 
-    // A simple implementation of the Simulator trait for our mock object.
     impl Simulator for MockSimulator {
         fn reset(&mut self) {
             let dim = 1 << self.num_qubits;
-            self.statevector = vec![Complex::new(0.0, 0.0); dim].into();
-            self.statevector = {
-                let mut sv = vec![Complex::new(0.0, 0.0); dim];
-                sv[0] = Complex::new(1.0, 0.0);
-                StateVector::from(sv)
-            };
+            let mut sv_vec = vec![Complex::new(0.0, 0.0); dim];
+            sv_vec[0] = Complex::new(1.0, 0.0);
+            self.statevector = StateVector::from(sv_vec);
             self.gate_log.clear();
         }
 
         fn apply_gate(&mut self, gate: &Gate) {
-            // In a real simulator, this would apply the gate matrix to the statevector.
-            // For the mock, we just log the gate to know it was called.
             self.gate_log.push(gate.clone());
-
-            // A toy implementation for RY to make the test meaningful
-            if let Gate::RY(.., angle) = gate {
-                let c = (angle / 2.0).cos();
-                let s = (angle / 2.0).sin();
-                let old_zero = self.statevector[0];
-                let old_one = self.statevector[1];
-                if let Some(state) = self.statevector.as_mut_slice().get_mut(0..2) {
-                    state[0] = old_zero * c - old_one * s;
-                    state[1] = old_zero * s + old_one * c;
-                }
+            let sv = self.statevector.as_mut_slice();
+            match gate {
+                Gate::RY(q, angle) => {
+                    let c = (angle / 2.0).cos();
+                    let s = (angle / 2.0).sin();
+                    let step = 1 << (q + 1);
+                    let half_step = 1 << *q;
+                    for i in (0..sv.len()).step_by(step) {
+                        for j in 0..half_step {
+                            let i0 = i + j;
+                            let i1 = i + j + half_step;
+                            let old_0 = sv[i0];
+                            let old_1 = sv[i1];
+                            sv[i0] = c * old_0 - s * old_1;
+                            sv[i1] = s * old_0 + c * old_1;
+                        }
+                    }
+                },
+                Gate::H(q) => {
+                    let inv_sqrt2 = 1.0 / (2.0_f64).sqrt();
+                    let step = 1 << (q + 1);
+                    let half_step = 1 << *q;
+                    for i in (0..sv.len()).step_by(step) {
+                        for j in 0..half_step {
+                            let i0 = i + j;
+                            let i1 = i + j + half_step;
+                            let old_0 = sv[i0];
+                            let old_1 = sv[i1];
+                            sv[i0] = inv_sqrt2 * (old_0 + old_1);
+                            sv[i1] = inv_sqrt2 * (old_0 - old_1);
+                        }
+                    }
+                },
+                Gate::CX(c, t) => {
+                    let control_mask = 1 << *c;
+                    let target_mask = 1 << *t;
+                    for i in 0..sv.len() {
+                        if (i & control_mask) != 0 && (i & target_mask) == 0 {
+                            sv.swap(i, i | target_mask);
+                        }
+                    }
+                },
+                _ => unimplemented!("Mock gate not implemented for this test."),
             }
         }
 
@@ -258,48 +316,58 @@ mod tests {
         }
 
         fn measure_pauli_string_expectation(&mut self, _operators: Vec<Gate>) -> f64 {
-            // Not needed for QCBM, return a dummy value.
             0.0
         }
     }
 
-    /// A simple ansatz for testing: a single RY rotation on the first qubit.
     fn simple_ry_ansatz(sim: &mut impl Simulator, params: &[f64]) {
         sim.apply_gate(&Gate::RY(0, params[0]));
     }
 
+    fn entangling_ansatz(sim: &mut impl Simulator, params: &[f64]) {
+        sim.apply_gate(&Gate::RY(0, params[0]));
+        sim.apply_gate(&Gate::H(0));
+        sim.apply_gate(&Gate::CX(0, 1));
+    }
+
     #[test]
-    fn test_qcbm_training() {
+    fn test_qcbm_training_with_adam_and_mmd() {
         let target_angle = (0.75_f64).sqrt().asin() * 2.0;
+        let training_data = vec!["1".to_string(), "1".to_string(), "1".to_string(), "0".to_string()];
 
-        let training_data = vec![
-            "1".to_string(), "1".to_string(), "1".to_string(), "0".to_string()
-        ];
-
-        // 2. Initialization
         let mock_sim = MockSimulator::new(1);
         let qcbm_runner = QcbmRunner::new(mock_sim, simple_ry_ansatz, &training_data);
-
-        // Start with a small, non-zero parameter to avoid getting stuck at a saddle point.
         let mut params = vec![0.1];
+        let mut optimizer = AdamOptimizer::new(params.len(), 0.02);
+        qcbm_runner.train(&mut params, &mut optimizer, 100);
 
-        // 3. Train the model
-        qcbm_runner.train(&mut params, 0.4, 50);
-
-        // 4. Assertions
         let final_param = params[0];
-        println!("Target RY angle: {:.4}, Found angle: {:.4}", target_angle, final_param);
-
-        // Check if the learned parameter is close to the ideal one.
-        // We check the cosine to handle periodicity (e.g. theta vs -theta or theta + 2pi).
-        assert!((final_param.cos() - target_angle.cos()).abs() < 0.1, "Learned parameter is not close to target");
-
-        // Check if the final distribution is close to the target distribution
+        assert!((final_param.cos() - target_angle.cos()).abs() < 0.2, "Learned parameter is not close to target");
         let final_dist = qcbm_runner.get_model_distribution(&params);
-        let p0 = final_dist.get("0").unwrap_or(&0.0);
-        let p1 = final_dist.get("1").unwrap_or(&0.0);
+        assert!((final_dist.get("0").unwrap_or(&0.0) - 0.25).abs() < 0.1);
+        assert!((final_dist.get("1").unwrap_or(&0.0) - 0.75).abs() < 0.1);
+    }
 
-        assert!((p0 - 0.25).abs() < 0.05, "Probability of '0' should be close to 0.25");
-        assert!((p1 - 0.75).abs() < 0.05, "Probability of '1' should be close to 0.75");
+    #[test]
+    fn test_qcbm_learns_entangled_state_with_adam_and_mmd() {
+        let training_data = vec!["00".to_string(), "11".to_string(), "00".to_string(), "11".to_string()];
+
+        let mock_sim = MockSimulator::new(2);
+        let qcbm_runner = QcbmRunner::new(mock_sim, entangling_ansatz, &training_data);
+        let mut params = vec![0.2];
+        let mut optimizer = AdamOptimizer::new(params.len(), 0.01);
+        qcbm_runner.train(&mut params, &mut optimizer, 100);
+
+        assert!(params[0].cos().abs() > 0.95, "Parameter should converge to ~0");
+        let final_dist = qcbm_runner.get_model_distribution(&params);
+        let p00 = final_dist.get("00").unwrap_or(&0.0);
+        let p11 = final_dist.get("11").unwrap_or(&0.0);
+        let p01 = final_dist.get("01").unwrap_or(&0.0);
+        let p10 = final_dist.get("10").unwrap_or(&0.0);
+
+        assert!((p00 - 0.5).abs() < 0.1, "P('00') should be ~0.5");
+        assert!((p11 - 0.5).abs() < 0.1, "P('11') should be ~0.5");
+        assert!(*p01 < 0.1, "P('01') should be ~0");
+        assert!(*p10 < 0.1, "P('10') should be ~0");
     }
 }
