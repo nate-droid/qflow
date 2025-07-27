@@ -1,19 +1,15 @@
 use std::collections::HashMap;
 use std::cell::RefCell;
-use num_complex::Complex;
 use rand::Rng;
 use rand::distributions::{Distribution, WeightedIndex};
 
 
-// --- Using types from your actual qsim crate ---
 use qsim::simulator::Simulator;
 use qsim::{Gate, StateVector};
 
 
 // A small constant to avoid floating point inaccuracies.
 const EPSILON: f64 = 1e-12;
-
-// --- Optimizer Trait and Adam Implementation ---
 
 /// A trait for optimization algorithms that update parameters based on gradients.
 pub trait Optimizer {

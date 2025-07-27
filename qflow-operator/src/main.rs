@@ -1,5 +1,8 @@
+use schemars::generate::SchemaSettings;
 use std::collections::{BTreeMap, HashMap};
 use std::hash::RandomState;
+use std::sync::Arc;
+
 use futures_util::StreamExt;
 use kube::{
     api::{Api, ListParams, Patch, PatchParams, PostParams},
@@ -8,18 +11,41 @@ use kube::{
     Resource,
 };
 use petgraph::{graphmap::DiGraphMap, visit::Topo};
-
-use std::sync::Arc;
 use thiserror::Error;
 use tokio::time::Duration;
 use tracing::{error, info, warn};
 
+// K8s API type imports
 use k8s_openapi::api::batch::v1::{Job, JobSpec};
-use k8s_openapi::api::core::v1::{PodTemplateSpec, PodSpec, Container, ConfigMap, Volume, VolumeMount, ConfigMapVolumeSource, PersistentVolumeClaim, PersistentVolumeClaimSpec, ResourceRequirements, VolumeResourceRequirements, PersistentVolumeClaimVolumeSource};
+use k8s_openapi::api::core::v1::{
+    ConfigMap, ConfigMapVolumeSource, Container, PersistentVolumeClaim, PersistentVolumeClaimSpec,
+    PersistentVolumeClaimVolumeSource, PodSpec, PodTemplateSpec, ResourceRequirements, Volume,
+    VolumeMount, VolumeResourceRequirements,
+};
 use k8s_openapi::apimachinery::pkg::api::resource::Quantity;
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta;
-use qflow_types::{QFlowTask, QFlowTaskSpec};
-use qflow_types::{QuantumWorkflowStatus, QuantumWorkflow};
+
+// Serde and schema generation imports
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
+use qflow_types::{QFlowTask, QFlowTaskSpec, QcbmOptimizerSpec, QuantumWorkflow};
+// Custom types from the original qflow_types crate are now defined here for clarity
+// based on the feature request.
+
+/// Defines the volume for a workflow.
+#[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
+pub struct WorkflowVolumeSpec {
+    pub size: String,
+}
+
+/// Represents the observed state of a QuantumWorkflow.
+#[derive(Serialize, Deserialize, Clone, Debug, JsonSchema, Default)]
+pub struct QuantumWorkflowStatus {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub phase: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub task_statuses: Option<BTreeMap<String, String>>,
+}
 
 #[derive(Error, Debug)]
 pub enum Error {
@@ -29,7 +55,8 @@ pub enum Error {
     Anyhow(#[from] anyhow::Error),
     #[error("MissingObjectKey: {0}")]
     MissingObjectKey(&'static str),
-    #[error("Workflow is invalid: {0}")] InvalidWorkflow(String),
+    #[error("Workflow is invalid: {0}")]
+    InvalidWorkflow(String),
 }
 
 const PVC_NAME: &str = "qflow-workspace";
@@ -40,13 +67,22 @@ const TASK_FAILED: &str = "Failed";
 const QFLOW_TASK_NAME_LABEL: &str = "qflow.io/task-name";
 
 async fn create_pvc_if_not_exists(client: &Client, wf: &QuantumWorkflow) -> Result<(), Error> {
-    let ns = wf.metadata.namespace.clone().ok_or(Error::MissingObjectKey("namespace"))?;
+    let ns = wf
+        .metadata
+        .namespace
+        .clone()
+        .ok_or(Error::MissingObjectKey("namespace"))?;
     let pvc_api = Api::<PersistentVolumeClaim>::namespaced(client.clone(), &ns);
     let pvc_name = format!("{}-{}", wf.metadata.name.clone().unwrap(), PVC_NAME);
 
     if pvc_api.get(&pvc_name).await.is_err() {
         info!("PVC {} not found, creating.", pvc_name);
-        let size = wf.spec.volume.as_ref().map(|v| v.size.clone()).unwrap_or_else(|| "1Gi".to_string());
+        let size = wf
+            .spec
+            .volume
+            .as_ref()
+            .map(|v| v.size.clone())
+            .unwrap_or_else(|| "1Gi".to_string());
         let pvc = PersistentVolumeClaim {
             metadata: ObjectMeta {
                 name: Some(pvc_name),
@@ -68,24 +104,18 @@ async fn create_pvc_if_not_exists(client: &Client, wf: &QuantumWorkflow) -> Resu
     Ok(())
 }
 
-fn create_job_for_task(wf: &QuantumWorkflow, task: &QFlowTask, cm_name: Option<String>) -> Result<Job, Error> {
-    let pvc_name = format!("{}-{}", wf.metadata.name.clone().unwrap(), PVC_NAME);
-    let (image, config_map_mount) = match &task.spec {
-        QFlowTaskSpec::Classical { image } => (image.clone(), None),
-        QFlowTaskSpec::Quantum { image, .. } => {
-            let mount = VolumeMount {
-                name: "qflow-input".to_string(),
-                mount_path: "/workspace/input".to_string(),
-                read_only: Some(true),
-                recursive_read_only: None,
-                sub_path: None,
-                mount_propagation: None,
-                sub_path_expr: None,
-            };
-            (image.clone(), Some(mount))
-        }
-    };
+// --- BEGIN: Modified Job Creation Logic to Support QCBM Tasks ---
 
+/// Creates a Kubernetes Job for a given task spec.
+/// This function has been refactored to handle Classical, Quantum, and the new QCBM task types.
+fn create_job_for_task(
+    wf: &QuantumWorkflow,
+    task: &QFlowTask,
+    cm_name: Option<String>,
+) -> Result<Job, Error> {
+    let pvc_name = format!("{}-{}", wf.metadata.name.clone().unwrap(), PVC_NAME);
+
+    // Common volume and mount for the shared workspace
     let mut volumes = vec![Volume {
         name: "qflow-workspace".to_string(),
         persistent_volume_claim: Some(PersistentVolumeClaimVolumeSource {
@@ -100,18 +130,91 @@ fn create_job_for_task(wf: &QuantumWorkflow, task: &QFlowTask, cm_name: Option<S
         ..Default::default()
     }];
 
-    if let (Some(cm), Some(mount)) = (cm_name, config_map_mount) {
-        volumes.push(Volume {
-            name: "qflow-input".to_string(),
-            config_map: Some(ConfigMapVolumeSource { name: cm, ..Default::default() }),
+    // Task-specific container setup
+    let container = match &task.spec {
+        QFlowTaskSpec::Classical { image } => Container {
+            name: "task-runner".to_string(),
+            image: Some(image.clone()),
+            command: Some(vec!["/qsim".to_string()]), // Replace with actual executable if different
+            volume_mounts: Some(volume_mounts),
+            image_pull_policy: Some("Never".to_string()),
             ..Default::default()
-        });
-        volume_mounts.push(mount);
-    }
+        },
+        QFlowTaskSpec::Quantum { image, .. } => {
+            let mount = VolumeMount {
+                name: "qflow-input".to_string(),
+                mount_path: "/workspace/input".to_string(),
+                read_only: Some(true),
+                ..Default::default()
+            };
+            volume_mounts.push(mount);
+
+            if let Some(cm) = cm_name {
+                volumes.push(Volume {
+                    name: "qflow-input".to_string(),
+                    config_map: Some(ConfigMapVolumeSource {
+                        name: cm,
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                });
+            }
+
+            let input_file_path = "/workspace/input/circuit.qasm";
+            Container {
+                name: "task-runner".to_string(),
+                image: Some(image.clone()),
+                command: Some(vec!["/qsim".to_string()]),
+                args: Some(vec![
+                    "--input-file".to_string(),
+                    input_file_path.to_string(),
+                ]),
+                volume_mounts: Some(volume_mounts),
+                image_pull_policy: Some("Never".to_string()),
+                ..Default::default()
+            }
+        }
+        // New logic branch for QCBM tasks
+        QFlowTaskSpec::Qcbm(qcbm_spec) => {
+            let training_data_json = serde_json::to_string(&qcbm_spec.training_data)
+                .map_err(|e| Error::Anyhow(anyhow::Error::from(e)))?;
+
+            let optimizer_spec = qcbm_spec.optimizer.clone().unwrap_or_else(|| {
+                QcbmOptimizerSpec {
+                    name: "Adam".to_string(),
+                    epochs: 100,
+                    learning_rate: 0.01,
+                    initial_params: None,
+                }
+            });
+
+            let mut args = vec![
+                "--ansatz".to_string(),
+                qcbm_spec.ansatz.clone(),
+                "--training-data".to_string(),
+                training_data_json,
+                "--epochs".to_string(),
+                optimizer_spec.epochs.to_string(),
+                "--learning-rate".to_string(),
+                optimizer_spec.learning_rate.to_string(),
+            ];
+            if let Some(params) = optimizer_spec.initial_params {
+                args.push("--initial-params".to_string());
+                args.push(params);
+            }
+
+            Container {
+                name: "task-runner".to_string(),
+                image: Some(qcbm_spec.image.clone()),
+                args: Some(args),
+                volume_mounts: Some(volume_mounts), // Mount shared workspace
+                image_pull_policy: Some("Never".to_string()),
+                ..Default::default()
+            }
+        }
+    };
 
     let job_name = format!("{}-{}", wf.metadata.name.clone().unwrap(), task.name);
-    let input_file_path = "/workspace/input/circuit.qasm"; // Example input file path
-
     Ok(Job {
         metadata: ObjectMeta {
             name: Some(job_name),
@@ -122,15 +225,7 @@ fn create_job_for_task(wf: &QuantumWorkflow, task: &QFlowTask, cm_name: Option<S
         spec: Some(JobSpec {
             template: PodTemplateSpec {
                 spec: Some(PodSpec {
-                    containers: vec![Container {
-                        name: "task-runner".to_string(),
-                        image: Some(image),
-                        command: Some(vec!["/qsim".to_string()]), // Replace with the actual executable
-                        args: Some(vec!["--input-file".to_string(), input_file_path.to_string()]),
-                        volume_mounts: Some(volume_mounts),
-                        image_pull_policy: Some("Never".to_string()),
-                        ..Default::default()
-                    }],
+                    containers: vec![container],
                     volumes: Some(volumes),
                     restart_policy: Some("Never".to_string()),
                     ..Default::default()
@@ -144,63 +239,53 @@ fn create_job_for_task(wf: &QuantumWorkflow, task: &QFlowTask, cm_name: Option<S
     })
 }
 
-async fn update_status(api: &Api<QuantumWorkflow>, name: &str, status: QuantumWorkflowStatus) -> Result<(), Error> {
-    let patch = Patch::Merge(serde_json::json!({
-        "status": status
-    }));
-    api.patch_status(name, &PatchParams::default(), &patch).await?;
+// --- END: Modified Job Creation Logic ---
+
+async fn update_status(
+    api: &Api<QuantumWorkflow>,
+    name: &str,
+    status: QuantumWorkflowStatus,
+) -> Result<(), Error> {
+    let patch = Patch::Merge(serde_json::json!({ "status": status }));
+    api.patch_status(name, &PatchParams::default(), &patch)
+        .await?;
     Ok(())
 }
 
 async fn reconcile(wf: Arc<QuantumWorkflow>, ctx: Arc<Context>) -> Result<Action, Error> {
-    // println!("reconciling {:?}", wf);
     let client = &ctx.client;
-    let ns = wf.metadata.namespace.clone().ok_or(Error::MissingObjectKey("namespace"))?;
+    let ns = wf
+        .metadata
+        .namespace
+        .clone()
+        .ok_or(Error::MissingObjectKey("namespace"))?;
     let wf_api = Api::<QuantumWorkflow>::namespaced(client.clone(), &ns);
     let job_api = Api::<Job>::namespaced(client.clone(), &ns);
     let cm_api = Api::<ConfigMap>::namespaced(client.clone(), &ns);
 
     // 1. Initialize status and PVC if they don't exist
     if wf.status.is_none() || wf.status.as_ref().unwrap().task_statuses.is_none() {
-        info!("Initializing status for workflow '{}'", wf.metadata.name.clone().unwrap());
+        info!(
+            "Initializing status for workflow '{}'",
+            wf.metadata.name.clone().unwrap()
+        );
         create_pvc_if_not_exists(client, &wf).await?;
         let mut initial_statuses = BTreeMap::new();
         for task in &wf.spec.tasks {
             initial_statuses.insert(task.name.clone(), TASK_PENDING.to_string());
         }
-        let status = QuantumWorkflowStatus { phase: Some(TASK_PENDING.to_string()), task_statuses: Some(initial_statuses) };
+        let status = QuantumWorkflowStatus {
+            phase: Some(TASK_PENDING.to_string()),
+            task_statuses: Some(initial_statuses),
+        };
         update_status(&wf_api, &wf.metadata.name.clone().unwrap(), status).await?;
-        return Ok(Action::requeue(Duration::from_secs(1))); // Requeue immediately to process
-    }
-
-    let mut real_task_statuses = BTreeMap::new();
-    let owned_jobs = job_api.list(&ListParams::default().labels(&format!("app.kubernetes.io/instance={}", wf.metadata.name.clone().unwrap()))).await?;
-
-    for job in owned_jobs {
-        if let Some(labels) = job.metadata.labels {
-            if let Some(task_name) = labels.get(QFLOW_TASK_NAME_LABEL) {
-                let status = if job.status.as_ref().and_then(|s| s.succeeded).unwrap_or(0) > 0 {
-                    TASK_SUCCEEDED
-                } else if job.status.as_ref().and_then(|s| s.failed).unwrap_or(0) > 0 {
-                    TASK_FAILED
-                } else {
-                    TASK_RUNNING
-                };
-                real_task_statuses.insert(task_name.clone(), status.to_string());
-            }
-        }
-    }
-
-    // fill in any tasks from the spec that don't have a job yet
-    for task in &wf.spec.tasks {
-        real_task_statuses.entry(task.name.clone()).or_insert(TASK_PENDING.to_string());
+        return Ok(Action::requeue(Duration::from_secs(1)));
     }
 
     // Dag construction
-
-    //let mut graph = DiGraphMap::<&str, ()>::new();
     let mut graph = DiGraphMap::<&str, _, RandomState>::new();
-    let task_map: HashMap<&str, &QFlowTask> = wf.spec.tasks.iter().map(|t| (t.name.as_str(), t)).collect();
+    let task_map: HashMap<&str, &QFlowTask> =
+        wf.spec.tasks.iter().map(|t| (t.name.as_str(), t)).collect();
 
     for task in &wf.spec.tasks {
         graph.add_node(&task.name);
@@ -209,7 +294,10 @@ async fn reconcile(wf: Arc<QuantumWorkflow>, ctx: Arc<Context>) -> Result<Action
         if let Some(deps) = &task.depends_on {
             for dep_name in deps {
                 if !graph.contains_node(dep_name) {
-                    return Err(Error::InvalidWorkflow(format!("Task '{}' depends on non-existent task '{}'", task.name, dep_name)));
+                    return Err(Error::InvalidWorkflow(format!(
+                        "Task '{}' depends on non-existent task '{}'",
+                        task.name, dep_name
+                    )));
                 }
                 graph.add_edge(dep_name, &task.name, ());
             }
@@ -218,12 +306,16 @@ async fn reconcile(wf: Arc<QuantumWorkflow>, ctx: Arc<Context>) -> Result<Action
     if petgraph::algo::is_cyclic_directed(&graph) {
         return Err(Error::InvalidWorkflow("Workflow has a cycle".to_string()));
     }
-    if petgraph::algo::is_cyclic_directed(&graph) {
-        return Err(Error::InvalidWorkflow("Workflow has a cycle".to_string()));
-    }
 
     // handle status
-    let mut current_statuses = wf.status.as_ref().unwrap().task_statuses.as_ref().unwrap().clone();
+    let mut current_statuses = wf
+        .status
+        .as_ref()
+        .unwrap()
+        .task_statuses
+        .as_ref()
+        .unwrap()
+        .clone();
     let mut made_change = false;
 
     // Check running jobs
@@ -233,28 +325,29 @@ async fn reconcile(wf: Arc<QuantumWorkflow>, ctx: Arc<Context>) -> Result<Action
             match job_api.get_status(&job_name).await {
                 Ok(job) => {
                     if let Some(s) = job.status {
-                        if s.succeeded.unwrap_or(0) > 0 { *status = TASK_SUCCEEDED.to_string(); made_change = true; }
-                        else if s.failed.unwrap_or(0) > 0 { *status = TASK_FAILED.to_string(); made_change = true; }
+                        if s.succeeded.unwrap_or(0) > 0 {
+                            *status = TASK_SUCCEEDED.to_string();
+                            made_change = true;
+                        } else if s.failed.unwrap_or(0) > 0 {
+                            *status = TASK_FAILED.to_string();
+                            made_change = true;
+                        }
                     }
-                },
+                }
                 Err(e) => error!("Failed to get job status for {}: {}", job_name, e),
             }
         }
     }
 
     // Start new jobs
-
-    // assert that graph returns a QFlowTask
-
     let mut topo = Topo::new(&graph);
     while let Some(node_idx) = topo.next(&graph) {
-        // let task: &QFlowTask = graph[node_idx];
         let task = task_map[node_idx];
-        // let task: &QFlowTask = graph[node_idx];
         let task_name = &task.name;
         if current_statuses.get(task_name) == Some(&TASK_PENDING.to_string()) {
             let deps_succeeded = task.depends_on.as_ref().map_or(true, |deps| {
-                deps.iter().all(|dep_name| current_statuses.get(dep_name) == Some(&TASK_SUCCEEDED.to_string()))
+                deps.iter()
+                    .all(|dep_name| current_statuses.get(dep_name) == Some(&TASK_SUCCEEDED.to_string()))
             });
 
             if deps_succeeded {
@@ -270,6 +363,7 @@ async fn reconcile(wf: Arc<QuantumWorkflow>, ctx: Arc<Context>) -> Result<Action
                     Some(cm_name)
                 } else { None };
 
+                // This single function call now handles all task types
                 let job = create_job_for_task(&wf, task, cm_name)?;
                 job_api.create(&PostParams::default(), &job).await?;
                 current_statuses.insert(task_name.clone(), TASK_RUNNING.to_string());
@@ -288,7 +382,10 @@ async fn reconcile(wf: Arc<QuantumWorkflow>, ctx: Arc<Context>) -> Result<Action
     };
 
     if made_change || wf.status.as_ref().unwrap().phase != final_phase {
-        let new_status = QuantumWorkflowStatus { phase: final_phase, task_statuses: Some(current_statuses) };
+        let new_status = QuantumWorkflowStatus {
+            phase: final_phase,
+            task_statuses: Some(current_statuses),
+        };
         update_status(&wf_api, &wf.metadata.name.clone().unwrap(), new_status).await?;
     }
 
@@ -300,9 +397,10 @@ struct Context {
 }
 
 fn on_error(wf: Arc<QuantumWorkflow>, error: &Error, _ctx: Arc<Context>) -> Action {
-    warn!("Reconciliation error for '{:?}': {:?}", wf.metadata.name, error);
-    println!("Reconciliation error for '{:?}': {:?} in ns: {:?}", wf.metadata.name, error, wf.metadata.namespace);
-    // Requeue after 5 seconds on error.
+    warn!(
+        "Reconciliation error for '{:?}': {:?}",
+        wf.metadata.name, error
+    );
     Action::requeue(Duration::from_secs(5))
 }
 
@@ -316,10 +414,8 @@ async fn main() -> anyhow::Result<()> {
     let context = Arc::new(Context {
         client: client.clone(),
     });
-    println!("Connecting to Kubernetes API");
+
     let workflows = Api::<QuantumWorkflow>::all(client);
-    println!("Listing Quantum Workflows");
-    println!("total: {}", workflows.list(&ListParams::default()).await?.items.len());
 
     info!("Starting qflow-operator");
 

@@ -9,7 +9,7 @@ spec:
       served: true
       storage: true
       subresources:
-        status: { }
+        status: {}
       schema:
         openAPIV3Schema:
           type: object
@@ -40,8 +40,6 @@ spec:
                       name:
                         type: string
                         description: "The unique name of the task within the workflow."
-                      # The `serde(flatten)` on the spec field in Rust translates
-                      # to the spec fields being directly on the task item.
                       classical:
                         type: object
                         description: "A classical (standard container) task."
@@ -69,7 +67,7 @@ spec:
                         properties:
                           image:
                             type: string
-                            description: "Container image with libraries (e.g., Qiskit, PennyLane) and the script to run the VQA loop."
+                            description: "Container image with libraries and the script to run the VQA loop."
                           ansatz:
                             type: string
                             description: "The parameterized quantum circuit (e.g., templated OpenQASM) as a string."
@@ -91,6 +89,40 @@ spec:
                             type: integer
                             default: 1024
                             description: "Number of shots for each quantum measurement."
+                      qcbm:
+                        type: object
+                        description: "A Quantum Circuit Born Machine training task."
+                        required: [ "image", "ansatz", "trainingData" ]
+                        properties:
+                          image:
+                            type: string
+                            description: "Container image with the QCBM runner and simulator."
+                          ansatz:
+                            type: string
+                            description: "The parameterized quantum circuit (e.g., templated OpenQASM) as a string."
+                          trainingData:
+                            type: array
+                            description: "A list of bitstrings representing the training dataset."
+                            items:
+                              type: string
+                          optimizer:
+                            type: object
+                            description: "Configuration for the classical optimizer (e.g., Adam)."
+                            required: ["name"]
+                            properties:
+                              name:
+                                type: string
+                                default: "Adam"
+                              epochs:
+                                type: integer
+                                default: 100
+                              learningRate:
+                                type: number
+                                format: double
+                                default: 0.01
+                              initialParams:
+                                type: string
+                                description: "The initial parameters for the ansatz as a JSON string."
             status:
               type: object
               description: "Reports the observed state of the QuantumWorkflow."

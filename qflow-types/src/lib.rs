@@ -37,6 +37,7 @@ pub enum QFlowTaskSpec {
         circuit: String,
         params: String,
     },
+    Qcbm(QcbmTaskSpec),
 }
 
 impl Default for QFlowTaskSpec {
@@ -161,3 +162,33 @@ fn default_samples() -> u32 { 100 }
 fn default_noise() -> f64 { 0.3 }
 fn default_test_size() -> f64 { 0.3 }
 fn default_c_param() -> f64 { 1.0 }
+
+#[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
+pub struct QcbmTaskSpec {
+    pub image: String,
+    pub ansatz: String,
+    #[serde(rename = "trainingData")]
+    pub training_data: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub optimizer: Option<QcbmOptimizerSpec>,
+}
+
+
+/// Defines the optimizer configuration for a QCBM task.
+#[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
+pub struct QcbmOptimizerSpec {
+    pub name: String,
+    #[serde(default = "default_epochs")]
+    pub epochs: i32,
+    #[serde(rename = "learningRate", default = "default_learning_rate")]
+    pub learning_rate: f64,
+    #[serde(rename = "initialParams", skip_serializing_if = "Option::is_none")]
+    pub initial_params: Option<String>,
+}
+
+fn default_epochs() -> i32 {
+    100
+}
+fn default_learning_rate() -> f64 {
+    0.01
+}
