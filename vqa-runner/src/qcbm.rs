@@ -3,20 +3,16 @@ use std::cell::RefCell;
 use rand::Rng;
 use rand::distributions::{Distribution, WeightedIndex};
 
-
 use qsim::simulator::Simulator;
 use qsim::{Gate, StateVector};
 
 
-// A small constant to avoid floating point inaccuracies.
 const EPSILON: f64 = 1e-12;
 
-/// A trait for optimization algorithms that update parameters based on gradients.
 pub trait Optimizer {
     fn update(&mut self, params: &mut [f64], grads: &[f64]);
 }
 
-/// The Adam (Adaptive Moment Estimation) optimizer.
 pub struct AdamOptimizer {
     learning_rate: f64,
     beta1: f64,
@@ -36,7 +32,7 @@ impl AdamOptimizer {
     pub fn new(num_params: usize, learning_rate: f64) -> Self {
         Self {
             learning_rate,
-            beta1: 0.92, // Slightly increased for more smoothing
+            beta1: 0.92,
             beta2: 0.999,
             epsilon: 1e-8,
             m: vec![0.0; num_params],
@@ -64,17 +60,13 @@ impl Optimizer for AdamOptimizer {
     }
 }
 
-
-/// Represents a Quantum Circuit Born Machine runner.
-/// It's designed to train a parameterized quantum circuit (ansatz)
-/// to replicate a target probability distribution from classical data.
 pub struct QcbmRunner<S, F>
 where
     S: Simulator,
     F: Fn(&mut S, &[f64]) + Copy,
 {
     simulator: RefCell<S>,
-    training_data: Vec<String>, // Store samples directly
+    training_data: Vec<String>,
     ansatz: F,
     num_qubits: usize,
 }
@@ -242,8 +234,8 @@ mod tests {
         let target_angle = (0.75_f64).sqrt().asin() * 2.0;
         let training_data = vec!["1".to_string(), "1".to_string(), "1".to_string(), "0".to_string()];
 
-        let mock_sim = QuantumSimulator::new(1);
-        let qcbm_runner = QcbmRunner::new(mock_sim, simple_ry_ansatz, &training_data);
+        let sim = QuantumSimulator::new(1);
+        let qcbm_runner = QcbmRunner::new(sim, simple_ry_ansatz, &training_data);
         let mut params = vec![0.1];
         let mut optimizer = AdamOptimizer::new(params.len(), 0.02);
         qcbm_runner.train(&mut params, &mut optimizer, 100);
@@ -259,8 +251,8 @@ mod tests {
     fn test_qcbm_learns_entangled_state_with_adam_and_mmd() {
         let training_data = vec!["00".to_string(), "11".to_string(), "00".to_string(), "11".to_string()];
 
-        let mock_sim = QuantumSimulator::new(2);
-        let qcbm_runner = QcbmRunner::new(mock_sim, entangling_ansatz, &training_data);
+        let sim = QuantumSimulator::new(2);
+        let qcbm_runner = QcbmRunner::new(sim, entangling_ansatz, &training_data);
         let mut params = vec![0.2];
         let mut optimizer = AdamOptimizer::new(params.len(), 0.01);
         qcbm_runner.train(&mut params, &mut optimizer, 100);

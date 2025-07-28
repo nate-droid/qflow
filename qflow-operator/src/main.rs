@@ -104,7 +104,6 @@ async fn create_pvc_if_not_exists(client: &Client, wf: &QuantumWorkflow) -> Resu
     Ok(())
 }
 
-// --- BEGIN: Modified Job Creation Logic to Support QCBM Tasks ---
 
 /// Creates a Kubernetes Job for a given task spec.
 /// This function has been refactored to handle Classical, Quantum, and the new QCBM task types.
@@ -238,8 +237,6 @@ fn create_job_for_task(
         ..Default::default()
     })
 }
-
-// --- END: Modified Job Creation Logic ---
 
 async fn update_status(
     api: &Api<QuantumWorkflow>,

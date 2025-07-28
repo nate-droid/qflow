@@ -109,8 +109,9 @@
         <div class="flex items-center gap-8">
             <h1 class="text-xl font-bold text-white">Quantum Workflow</h1>
             <nav class="flex items-center gap-6 text-sm font-medium text-slate-400">
-                <a id="nav-svm" class="nav-link active">Quantum SVM Experiment</a>
-                <a id="nav-visualizer" class="nav-link">Workflow Visualizer</a>
+                <a id="nav-svm" class="nav-link">Quantum SVM Experiment</a>
+                <a id="nav-visualizer" class="nav-link active">Workflow Visualizer</a>
+                <a id="nav-qcbm" class="nav-link">Submit QCBM</a>
                 <a id="nav-submitter" class="nav-link">Submit QASM</a>
             </nav>
         </div>
@@ -121,7 +122,7 @@
     </header>
 
     <!-- Main Content -->
-    <main id="svm-page" class="flex-1 overflow-y-auto p-8">
+    <main id="svm-page" class="flex-1 overflow-y-auto p-8 hidden">
         <div class="max-w-4xl mx-auto">
             <h2 class="text-2xl font-bold text-white mb-2">Run a New Quantum SVM Experiment</h2>
             <p class="text-slate-400 mb-6">Specify the parameters for the QuantumSVMWorkflow and click "Run Experiment" to submit.</p>
@@ -222,7 +223,7 @@
         </div>
     </main>
 
-    <main id="visualizer-page" class="flex-1 flex overflow-hidden hidden">
+    <main id="visualizer-page" class="flex-1 flex overflow-hidden">
         <div id="cy-container" class="flex-1 relative">
             <div id="cy"></div>
             <!-- Initial Fetch Overlay -->
@@ -260,27 +261,121 @@
                             </h3>
                             <p id="details-status" class="font-code text-sm font-semibold"></p>
                         </div>
-                        <!-- Circuit/Command Card -->
-                        <div class="bg-slate-900/50 p-4 rounded-lg border border-slate-700">
-                            <h3 id="details-circuit-title" class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-2">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M12 6V3m0 18v-3" /></svg>
-                                Circuit (OpenQASM)
-                            </h3>
-                            <pre class="bg-slate-950 rounded-md p-3 text-sm font-code text-indigo-300 overflow-x-auto"><code id="details-circuit"></code></pre>
+
+                        <!-- Generic Quantum/Classical Details -->
+                        <div id="quantum-classical-details" class="space-y-5">
+                            <div class="bg-slate-900/50 p-4 rounded-lg border border-slate-700">
+                                <h3 id="details-circuit-title" class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-2">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M12 6V3m0 18v-3" /></svg>
+                                    Circuit (OpenQASM)
+                                </h3>
+                                <pre class="bg-slate-950 rounded-md p-3 text-sm font-code text-indigo-300 overflow-x-auto"><code id="details-circuit"></code></pre>
+                            </div>
+                            <div class="bg-slate-900/50 p-4 rounded-lg border border-slate-700">
+                                <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-2">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                                    Parameters
+                                </h3>
+                                <pre class="bg-slate-950 rounded-md p-3 text-sm font-code text-amber-300 overflow-x-auto"><code id="details-params"></code></pre>
+                            </div>
                         </div>
-                        <!-- Parameters Card -->
-                        <div class="bg-slate-900/50 p-4 rounded-lg border border-slate-700">
-                            <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-2">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                                Parameters
-                            </h3>
-                            <pre class="bg-slate-950 rounded-md p-3 text-sm font-code text-amber-300 overflow-x-auto"><code id="details-params"></code></pre>
+
+                        <!-- QCBM-Specific Details -->
+                        <div id="qcbm-details" class="hidden space-y-5">
+                            <div class="bg-slate-900/50 p-4 rounded-lg border border-slate-700">
+                                <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Image</h3>
+                                <p id="details-qcbm-image" class="font-code text-sm text-indigo-300"></p>
+                            </div>
+                            <div class="bg-slate-900/50 p-4 rounded-lg border border-slate-700">
+                                <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Ansatz</h3>
+                                <p id="details-qcbm-ansatz" class="font-code text-sm text-indigo-300"></p>
+                            </div>
+                            <div class="bg-slate-900/50 p-4 rounded-lg border border-slate-700">
+                                <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Optimizer &amp; Training Data</h3>
+                                <pre class="bg-slate-950 rounded-md p-3 text-sm font-code text-amber-300 overflow-x-auto"><code id="details-qcbm-params"></code></pre>
+                            </div>
                         </div>
+
                         <div id="results-button-container" class="pt-2"></div>
                     </div>
                 </div>
             </div>
         </aside>
+    </main>
+
+    <main id="qcbm-submitter-page" class="flex-1 overflow-y-auto p-8 hidden">
+        <div class="max-w-4xl mx-auto">
+            <h2 class="text-2xl font-bold text-white mb-2">Submit QCBM Workflow</h2>
+            <p class="text-slate-400 mb-6">Define a QCBM task and its parameters to create a new workflow.</p>
+
+            <div id="qcbm-notification" class="hidden p-4 mb-4 rounded-md"></div>
+
+            <div class="space-y-6">
+                <!-- Workflow Info -->
+                <div class="p-6 bg-slate-800 rounded-lg border border-slate-700">
+                    <h3 class="text-lg font-semibold text-indigo-400 mb-4">Workflow Details</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label for="qcbm-workflow-name" class="block text-sm font-medium text-slate-300 mb-1">Workflow Name</label>
+                            <input type="text" id="qcbm-workflow-name" class="bg-slate-900 border border-slate-600 focus:ring-indigo-500 focus:border-indigo-500 rounded-md py-2 px-3 text-white w-full" placeholder="e.g., my-qcbm-training">
+                        </div>
+                        <div>
+                            <label for="qcbm-namespace" class="block text-sm font-medium text-slate-300 mb-1">Namespace</label>
+                            <input type="text" id="qcbm-namespace" class="bg-slate-900 border border-slate-600 focus:ring-indigo-500 focus:border-indigo-500 rounded-md py-2 px-3 text-white w-full" value="default">
+                        </div>
+                    </div>
+                </div>
+                <!-- Task Spec -->
+                <div class="p-6 bg-slate-800 rounded-lg border border-slate-700">
+                    <h3 class="text-lg font-semibold text-indigo-400 mb-4">Task Specification</h3>
+                    <div class="space-y-4">
+                        <div>
+                            <label for="qcbm-task-name" class="block text-sm font-medium text-slate-300 mb-1">Task Name</label>
+                            <input type="text" id="qcbm-task-name" class="bg-slate-900 border border-slate-600 focus:ring-indigo-500 focus:border-indigo-500 rounded-md py-2 px-3 text-white w-full" value="qcbm-training-task">
+                        </div>
+                        <div>
+                            <label for="qcbm-image" class="block text-sm font-medium text-slate-300 mb-1">Container Image</label>
+                            <input type="text" id="qcbm-image" class="bg-slate-900 border border-slate-600 focus:ring-indigo-500 focus:border-indigo-500 rounded-md py-2 px-3 text-white w-full" value="qcbm-runner:latest">
+                        </div>
+                        <div>
+                            <label for="qcbm-ansatz" class="block text-sm font-medium text-slate-300 mb-1">Ansatz</label>
+                            <input type="text" id="qcbm-ansatz" class="bg-slate-900 border border-slate-600 focus:ring-indigo-500 focus:border-indigo-500 rounded-md py-2 px-3 text-white w-full" value="MyAnsatz">
+                        </div>
+                        <div>
+                            <label for="qcbm-training-data" class="block text-sm font-medium text-slate-300 mb-1">Training Data (one entry per line)</label>
+                            <textarea id="qcbm-training-data" rows="4" class="w-full bg-slate-950 border border-slate-600 rounded-md p-3 font-code text-indigo-300 focus:ring-indigo-500 focus:border-indigo-500" placeholder="/path/to/data1.csv&#10;/path/to/data2.csv"></textarea>
+                        </div>
+                    </div>
+                </div>
+                <!-- Optimizer -->
+                <div class="p-6 bg-slate-800 rounded-lg border border-slate-700">
+                    <h3 class="text-lg font-semibold text-indigo-400 mb-4">Optimizer</h3>
+                    <div class="space-y-4">
+                        <div>
+                            <label for="qcbm-opt-name" class="block text-sm font-medium text-slate-300 mb-1">Name</label>
+                            <input type="text" id="qcbm-opt-name" class="bg-slate-900 border border-slate-600 focus:ring-indigo-500 focus:border-indigo-500 rounded-md py-2 px-3 text-white w-full" value="Adam">
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label for="qcbm-opt-epochs" class="block text-sm font-medium text-slate-300 mb-1">Epochs</label>
+                                <input type="number" id="qcbm-opt-epochs" class="bg-slate-900 border border-slate-600 focus:ring-indigo-500 focus:border-indigo-500 rounded-md py-2 px-3 text-white w-full" value="100">
+                            </div>
+                            <div>
+                                <label for="qcbm-opt-lr" class="block text-sm font-medium text-slate-300 mb-1">Learning Rate</label>
+                                <input type="number" step="0.001" id="qcbm-opt-lr" class="bg-slate-900 border border-slate-600 focus:ring-indigo-500 focus:border-indigo-500 rounded-md py-2 px-3 text-white w-full" value="0.01">
+                            </div>
+                        </div>
+                        <div>
+                            <label for="qcbm-opt-params" class="block text-sm font-medium text-slate-300 mb-1">Initial Parameters (optional JSON string)</label>
+                            <textarea id="qcbm-opt-params" rows="3" class="w-full bg-slate-950 border border-slate-600 rounded-md p-3 font-code text-indigo-300 focus:ring-indigo-500 focus:border-indigo-500" placeholder="[0.1, 0.2, 0.3, 0.4]"></textarea>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex justify-end">
+                    <button id="qcbm-submit-button" class="btn btn-primary">Submit Workflow</button>
+                </div>
+            </div>
+        </div>
     </main>
 
     <main id="qasm-submitter-page" class="flex-1 overflow-y-auto p-8 hidden">
@@ -355,36 +450,16 @@
             nav: {
                 svm: document.getElementById('nav-svm'),
                 visualizer: document.getElementById('nav-visualizer'),
+                qcbm: document.getElementById('nav-qcbm'),
                 submitter: document.getElementById('nav-submitter'),
             },
             pages: {
                 svm: document.getElementById('svm-page'),
                 visualizer: document.getElementById('visualizer-page'),
+                qcbm: document.getElementById('qcbm-submitter-page'),
                 submitter: document.getElementById('qasm-submitter-page'),
             },
             pollingStatus: document.getElementById('polling-status'),
-            // SVM Page Elements
-            svm: {
-                runButton: document.getElementById('run-experiment-button'),
-                statusDisplay: document.getElementById('svm-status-display'),
-                loadingIndicator: document.getElementById('svm-loading-indicator'),
-                statusText: document.getElementById('svm-status-text'),
-                resultsArea: document.getElementById('results-area'),
-                resultPlot: document.getElementById('result-plot'),
-                resultMetrics: document.getElementById('result-metrics'),
-                errorDisplay: document.getElementById('svm-error-display'),
-                errorText: document.getElementById('svm-error-text'),
-                inputs: {
-                    generator: document.getElementById('ds-generator'),
-                    samples: document.getElementById('ds-samples'),
-                    noise: document.getElementById('ds-noise'),
-                    test_size: document.getElementById('ds-test-size'),
-                    image: document.getElementById('kernel-image'),
-                    C: document.getElementById('trainer-c'),
-                    modelName: document.getElementById('output-model-name'),
-                    plotName: document.getElementById('output-plot-name'),
-                }
-            },
             // Visualizer Page Elements
             visualizer: {
                 graphOverlay: document.getElementById('graph-overlay'),
@@ -404,6 +479,21 @@
                     params: document.getElementById('details-params'),
                     resultsBtnContainer: document.getElementById('results-button-container'),
                 }
+            },
+            // QCBM Submitter Elements
+            qcbm: {
+                notification: document.getElementById('qcbm-notification'),
+                workflowName: document.getElementById('qcbm-workflow-name'),
+                namespace: document.getElementById('qcbm-namespace'),
+                taskName: document.getElementById('qcbm-task-name'),
+                image: document.getElementById('qcbm-image'),
+                ansatz: document.getElementById('qcbm-ansatz'),
+                trainingData: document.getElementById('qcbm-training-data'),
+                optName: document.getElementById('qcbm-opt-name'),
+                optEpochs: document.getElementById('qcbm-opt-epochs'),
+                optLr: document.getElementById('qcbm-opt-lr'),
+                optParams: document.getElementById('qcbm-opt-params'),
+                submitButton: document.getElementById('qcbm-submit-button'),
             },
             // QASM Submitter Elements
             qasm: {
@@ -435,20 +525,18 @@
             Object.values(dom.pages).forEach(p => p.classList.add('hidden'));
             Object.values(dom.nav).forEach(n => n.classList.remove('active'));
 
-            if (pageName === 'svm') {
-                dom.pages.svm.classList.remove('hidden');
-                dom.nav.svm.classList.add('active');
-            } else if (pageName === 'visualizer') {
+            if (dom.pages[pageName]) {
+                dom.pages[pageName].classList.remove('hidden');
+                dom.nav[pageName].classList.add('active');
+            } else {
                 dom.pages.visualizer.classList.remove('hidden');
                 dom.nav.visualizer.classList.add('active');
-            } else if (pageName === 'submitter') {
-                dom.pages.submitter.classList.remove('hidden');
-                dom.nav.submitter.classList.add('active');
             }
         }
 
         dom.nav.svm.addEventListener('click', () => showPage('svm'));
         dom.nav.visualizer.addEventListener('click', () => showPage('visualizer'));
+        dom.nav.qcbm.addEventListener('click', () => showPage('qcbm'));
         dom.nav.submitter.addEventListener('click', () => showPage('submitter'));
 
         // --- Modal Logic ---
@@ -559,8 +647,8 @@
                     data: { id: task.name, label: task.name, status: taskStatus, rawData: task },
                     classes: `status-${taskStatus}`
                 });
-                if (task.dependsOn) {
-                    task.dependsOn.forEach(dep => {
+                if (task.depends_on) {
+                    task.depends_on.forEach(dep => {
                         elements.push({ group: 'edges', data: { id: `${dep}->${task.name}`, source: dep, target: task.name } });
                     });
                 }
@@ -631,10 +719,35 @@
                 details.title.textContent = task.name;
                 details.status.textContent = status.charAt(0).toUpperCase() + status.slice(1);
 
-                const isQuantum = task.quantum;
-                details.circuitTitle.textContent = isQuantum ? "Quantum Circuit (OpenQASM)" : "Classical Command";
-                details.circuit.textContent = isQuantum ? task.quantum.circuit : (task.classical?.command || 'N/A');
-                details.params.textContent = JSON.stringify(isQuantum ? task.quantum.params : (task.classical?.params || {}), null, 2);
+                const qcDetails = document.getElementById('quantum-classical-details');
+                const qcbmDetails = document.getElementById('qcbm-details');
+
+                if (task.qcbm) {
+                    qcDetails.classList.add('hidden');
+                    qcbmDetails.classList.remove('hidden');
+
+                    document.getElementById('details-qcbm-image').textContent = task.qcbm.image;
+                    document.getElementById('details-qcbm-ansatz').textContent = task.qcbm.ansatz;
+                    const paramsToShow = {
+                        trainingData: task.qcbm.trainingData,
+                        optimizer: task.qcbm.optimizer
+                    };
+                    document.getElementById('details-qcbm-params').textContent = JSON.stringify(paramsToShow, null, 2);
+
+                } else {
+                    qcDetails.classList.remove('hidden');
+                    qcbmDetails.classList.add('hidden');
+
+                    if (task.quantum) {
+                        details.circuitTitle.textContent = "Quantum Circuit (OpenQASM)";
+                        details.circuit.textContent = task.quantum.circuit || 'N/A';
+                        details.params.textContent = JSON.stringify(task.quantum.params || {}, null, 2);
+                    } else { // Classical
+                        details.circuitTitle.textContent = "Classical Command";
+                        details.circuit.textContent = task.classical?.command || 'N/A';
+                        details.params.textContent = JSON.stringify(task.classical?.params || {}, null, 2);
+                    }
+                }
 
                 details.resultsBtnContainer.innerHTML = '';
                 if (status === 'succeeded') {
@@ -664,18 +777,29 @@
                 dom.resultsModal.title.textContent = `Results for: ${taskName}`;
 
                 let amplitudes = null;
-                if (Array.isArray(results) && results.length > 0) {
+                if (results && results.raw_logs) {
+                    try {
+                        const parsedLogs = JSON.parse(results.raw_logs);
+                        if (Array.isArray(parsedLogs) && parsedLogs.length > 0) {
+                            const lastStep = parsedLogs[parsedLogs.length - 1];
+                            if (lastStep && lastStep.finalStateVector && Array.isArray(lastStep.finalStateVector.amplitudes)) {
+                                amplitudes = lastStep.finalStateVector.amplitudes;
+                            }
+                        }
+                    } catch(e) { /* Not JSON, do nothing */ }
+                } else if (Array.isArray(results) && results.length > 0) {
                     const lastStep = results[results.length - 1];
                     if (lastStep && lastStep.finalStateVector && Array.isArray(lastStep.finalStateVector.amplitudes)) {
                         amplitudes = lastStep.finalStateVector.amplitudes;
                     }
                 }
 
-                switchResultTabs(!!amplitudes);
 
                 if (amplitudes) {
+                    switchResultTabs(true);
                     renderStateVectorVisualization(amplitudes);
                 } else {
+                    switchResultTabs(false);
                     dom.resultsModal.log.textContent = JSON.stringify(results, null, 2);
                 }
 
@@ -768,151 +892,56 @@
         dom.resultsModal.tabVis.addEventListener('click', (e) => { e.preventDefault(); switchResultTabs(true); });
         dom.resultsModal.tabLog.addEventListener('click', (e) => { e.preventDefault(); switchResultTabs(false); });
 
+        // --- QCBM Submitter Logic ---
+        async function handleQcbmSubmit() {
+            const { qcbm } = dom;
+            const workflowName = qcbm.workflowName.value.trim();
+            const namespace = qcbm.namespace.value.trim();
+            const taskName = qcbm.taskName.value.trim();
+            const image = qcbm.image.value.trim();
+            const ansatz = qcbm.ansatz.value.trim();
 
-        // --- SVM Experiment Logic ---
-        function stopSvmPolling() {
-            if (svmPollingIntervalId) clearInterval(svmPollingIntervalId);
-            svmPollingIntervalId = null;
-        }
-
-        function startSvmPolling(workflowName) {
-            stopSvmPolling();
-            updateSvmStatus(`Workflow submitted. Now polling for status...`);
-            dom.svm.loadingIndicator.classList.remove('hidden');
-
-            svmPollingIntervalId = setInterval(() => {
-                fetchSvmStatus(workflowName);
-            }, 3000);
-        }
-
-        function updateSvmStatus(message, showLoading = true) {
-            dom.svm.statusDisplay.classList.remove('hidden');
-            dom.svm.statusText.textContent = message;
-            dom.svm.loadingIndicator.style.display = showLoading ? 'block' : 'none';
-        }
-
-        function resetSvmUI() {
-            dom.svm.runButton.disabled = false;
-            dom.svm.statusDisplay.classList.add('hidden');
-            dom.svm.resultsArea.classList.add('hidden');
-            dom.svm.errorDisplay.classList.add('hidden');
-            stopSvmPolling();
-        }
-
-        function displaySvmResults(plotData, metrics) {
-            updateSvmStatus('Completed', false);
-            dom.svm.runButton.disabled = false;
-            dom.svm.resultsArea.classList.remove('hidden');
-            dom.svm.resultPlot.src = `data:image/png;base64,${plotData}`;
-            dom.svm.resultMetrics.textContent = metrics;
-        }
-
-        function displaySvmError(errorMessage) {
-            stopSvmPolling();
-            updateSvmStatus('Failed', false);
-            dom.svm.runButton.disabled = false;
-            dom.svm.errorDisplay.classList.remove('hidden');
-            dom.svm.errorText.textContent = errorMessage;
-        }
-
-        async function handleRunExperiment() {
-            resetSvmUI();
-            dom.svm.runButton.disabled = true;
-            updateSvmStatus('Submitting workflow...');
-
-            const spec = {
-                dataset: {
-                    generator: dom.svm.inputs.generator.value,
-                    samples: parseInt(dom.svm.inputs.samples.value, 10),
-                    noise: parseFloat(dom.svm.inputs.noise.value),
-                    test_size: parseFloat(dom.svm.inputs.test_size.value),
-                },
-                kernel: {
-                    image: dom.svm.inputs.image.value,
-                },
-                trainer: {
-                    C: parseFloat(dom.svm.inputs.C.value),
-                },
-                output: {
-                    modelName: dom.svm.inputs.modelName.value,
-                    plotName: dom.svm.inputs.plotName.value,
-                }
-            };
-
-            try {
-                const response = await fetch(`${API_BASE_URL}/run_experiment`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(spec)
-                });
-
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    throw new Error(`Server responded with ${response.status}: ${errorText}`);
-                }
-
-                const result = await response.json();
-                const workflowName = result.workflow_name;
-                if (!workflowName) {
-                    throw new Error('Backend did not return a workflow_name.');
-                }
-                startSvmPolling(workflowName);
-
-            } catch (error) {
-                console.error('Failed to run experiment:', error);
-                displaySvmError(error.message);
-            }
-        }
-
-        async function fetchSvmStatus(workflowName) {
-            const apiUrl = `${API_BASE_URL}/get_status/${workflowName}`;
-            try {
-                const response = await fetch(apiUrl);
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    throw new Error(`Status check failed with ${response.status}: ${errorText}`);
-                }
-                const data = await response.json();
-
-                updateSvmStatus(`Phase: ${data.status}`);
-
-                if (data.status === 'Completed') {
-                    stopSvmPolling();
-                    displaySvmResults(data.plot, data.metrics);
-                } else if (data.status === 'Failed') {
-                    stopSvmPolling();
-                    displaySvmError(data.message || 'The workflow failed without a specific message.');
-                }
-            } catch (error) {
-                console.error('Failed to fetch status:', error);
-                displaySvmError(`Could not poll for status. ${error.message}`);
-                stopSvmPolling();
-            }
-        }
-
-        dom.svm.runButton.addEventListener('click', handleRunExperiment);
-
-        // --- QASM Submitter Logic ---
-        async function handleQasmSubmit() {
-            const name = dom.qasm.nameInput.value.trim();
-            const namespace = dom.qasm.namespaceInput.value.trim();
-            const qasm = dom.qasm.input.value.trim();
-
-            if (!name || !namespace || !qasm) {
-                showQasmNotification('Please fill in all fields.', 'error');
+            if (!workflowName || !namespace || !taskName || !image || !ansatz) {
+                showQcbmNotification('Please fill in all required fields.', 'error');
                 return;
             }
 
-            dom.qasm.submitButton.textContent = 'Submitting...';
-            dom.qasm.submitButton.disabled = true;
+            const trainingData = qcbm.trainingData.value.split('\n').filter(line => line.trim() !== '');
 
-            const apiUrl = `${API_BASE_URL}/api/workflows/${namespace}/${name}/qasm`;
+            const payload = {
+                apiVersion: "qflow.io/v1alpha1",
+                kind: "QuantumWorkflow",
+                metadata: { name: workflowName, namespace: namespace },
+                spec: {
+                    tasks: [{
+                        name: taskName,
+                        spec: {
+                            qcbm: {
+                                image: image,
+                                ansatz: ansatz,
+                                trainingData: trainingData,
+                                optimizer: {
+                                    name: qcbm.optName.value.trim(),
+                                    epochs: parseInt(qcbm.optEpochs.value, 10),
+                                    learningRate: parseFloat(qcbm.optLr.value),
+                                    initialParams: qcbm.optParams.value.trim() || null
+                                }
+                            }
+                        }
+                    }]
+                }
+            };
+
+            qcbm.submitButton.textContent = 'Submitting...';
+            qcbm.submitButton.disabled = true;
+
+            const apiUrl = `${API_BASE_URL}/api/workflows/${namespace}`;
 
             try {
                 const response = await fetch(apiUrl, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'text/plain' },
-                    body: qasm
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
                 });
 
                 if (!response.ok) {
@@ -921,26 +950,26 @@
                 }
 
                 const result = await response.json();
-                showQasmNotification(`Workflow "${result.metadata.name}" created successfully! Switching to visualizer...`, 'success');
+                showQcbmNotification(`Workflow "${result.metadata.name}" created successfully! Switching to visualizer...`, 'success');
 
                 setTimeout(() => {
-                    dom.visualizer.workflowInput.value = name;
+                    dom.visualizer.workflowInput.value = workflowName;
                     dom.visualizer.namespaceInput.value = namespace;
                     showPage('visualizer');
                     handleFetchWorkflow(false);
-                    dom.qasm.notification.classList.add('hidden');
+                    qcbm.notification.classList.add('hidden');
                 }, 2000);
 
             } catch (error) {
-                showQasmNotification(`Error: ${error.message}`, 'error');
+                showQcbmNotification(`Error: ${error.message}`, 'error');
             } finally {
-                dom.qasm.submitButton.textContent = 'Submit Workflow';
-                dom.qasm.submitButton.disabled = false;
+                qcbm.submitButton.textContent = 'Submit Workflow';
+                qcbm.submitButton.disabled = false;
             }
         }
 
-        function showQasmNotification(message, type = 'success') {
-            const notification = dom.qasm.notification;
+        function showQcbmNotification(message, type = 'success') {
+            const notification = dom.qcbm.notification;
             notification.textContent = message;
             notification.className = 'p-4 mb-4 rounded-md'; // Reset classes
             if (type === 'success') {
@@ -951,7 +980,22 @@
             notification.classList.remove('hidden');
         }
 
+        dom.qcbm.submitButton.addEventListener('click', handleQcbmSubmit);
+
+        // --- QASM Submitter Logic ---
+        async function handleQasmSubmit() {
+            // This function is currently non-operational as the backend doesn't support it.
+        }
         dom.qasm.submitButton.addEventListener('click', handleQasmSubmit);
+
+        // --- SVM Logic ---
+        async function handleRunExperiment() {
+            // This function is currently non-operational as the backend doesn't support it.
+        }
+        dom.svm.runButton.addEventListener('click', handleRunExperiment);
+
+        // --- Initial Page Load ---
+        showPage('visualizer');
 
     });
 </script>

@@ -1,7 +1,7 @@
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
-    routing::{get, post},
+    routing::{get},
     Json, Router,
 };
 use k8s_openapi::api::{batch::v1::Job, core::v1::Pod};
@@ -14,16 +14,11 @@ use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, sync::Arc};
 use tower_http::cors::{Any, CorsLayer};
 use qflow_types::{QFlowTaskSpec, QuantumWorkflow};
-// --- BEGIN: Shared CRD Type Definitions ---
-// In a real project, these structs would come from a shared `qflow-types` crate
-// that is used by both the operator and this API server.
 
-/// Helper function for serde default value on QcbmOptimizerSpec.
 fn default_epochs() -> i32 {
     100
 }
 
-/// Helper function for serde default value on QcbmOptimizerSpec.
 fn default_learning_rate() -> f64 {
     0.01
 }
@@ -119,8 +114,6 @@ async fn main() {
     axum::serve(listener, app).await.unwrap();
 }
 
-/// **REFACTORED ENDPOINT**
-/// Fetches the authoritative QuantumWorkflow CR and enriches it with status from Jobs.
 async fn fetch_workflow(
     State(state): State<Arc<AppState>>,
     Path(workflow_name): Path<String>,
