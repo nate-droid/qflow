@@ -1,9 +1,4 @@
-use axum::{
-    extract::{Path, Query, State},
-    http::StatusCode,
-    routing::{get},
-    Json, Router,
-};
+use axum::{extract::{Path, Query, State}, http::StatusCode, routing::{get}, Form, Json, Router};
 use k8s_openapi::api::{batch::v1::Job, core::v1::Pod};
 use kube::{
     api::{Api, ListParams, LogParams, PostParams},
@@ -12,8 +7,12 @@ use kube::{
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, sync::Arc};
+use axum::extract::Request;
+use axum::response::Html;
+use axum::routing::post;
 use tower_http::cors::{Any, CorsLayer};
-use qflow_types::{QFlowTaskSpec, QuantumWorkflow};
+use tower_http::trace::TraceLayer;
+use qflow_types::{QFlowTaskSpec, QuantumSVMWorkflowSpec, QuantumWorkflow, QuantumWorkflowSpec};
 
 fn default_epochs() -> i32 {
     100
@@ -103,6 +102,23 @@ async fn main() {
         .route(
             "/api/workflows/{namespace}/{name}/tasks/{task_name}/results",
             get(fetch_task_results),
+        )
+        .route("/api/workflows/{namespace}/new", post(submit_workflow))
+        .layer(TraceLayer::new_for_http()
+            .make_span_with(|req: &Request| {
+                let method = req.method().clone();
+                let uri = req.uri().clone();
+                println!("Received request: {} {}", method, uri);
+
+                println!("{:#?}", req);
+
+                tracing::debug_span!(
+                    "request",
+                    method = %method,
+                    uri = %uri,
+                    headers = ?req.headers(),
+                )
+            }).on_failure(())
         )
         // This endpoint remains hypothetical as it depends on a `qflowc` library
         // .route("/api/workflows/{namespace}/{name}/qasm", post(submit_qasm))
@@ -281,4 +297,54 @@ async fn fetch_task_results(
         eprintln!("No succeeded pod found with label '{}'", pod_label);
         Err(StatusCode::NOT_FOUND)
     }
+}
+
+async fn submit_workflow(
+    State(state): State<Arc<AppState>>,
+    Path((namespace)): Path<(String)>,
+    Json(workflow): Json<QuantumWorkflowSpec>,
+) -> Result<StatusCode, StatusCode> {
+
+    // check the workflow
+    println!("Submitting workflow '{:?}'", workflow);
+
+
+    let wf_api: Api<QuantumWorkflow> = Api::namespaced(state.client.clone(), &namespace);
+
+    // todo: will need to handle types of WorkflowSpec here
+    // For now, we assume the workflow is of type QuantumSVMWorkflowSpec
+
+    // Convert the SyntheticWorkflow to a QuantumWorkflow CR
+    let quantum_workflow = QuantumWorkflow {
+        metadata: kube::api::ObjectMeta {
+            name: Some("workflow_name".parse().unwrap()),
+            namespace: Some(namespace),
+            ..Default::default()
+        },
+        spec: workflow,
+        status: Default::default(),
+    };
+
+    // Create or update the QuantumWorkflow CR
+    match wf_api.create(&PostParams::default(), &quantum_workflow).await {
+        Ok(_) => Ok(StatusCode::CREATED),
+        Err(e) => {
+            eprintln!("Error submitting workflow: {}", e);
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
+    }
+}
+
+#[derive(Deserialize, Debug)]
+#[allow(dead_code)]
+struct Input {
+    name: String,
+    email: String,
+}
+async fn accept_form(Form(input): Form<Input>) -> Html<String> {
+    dbg!(&input);
+    Html(format!(
+        "email='{}'\nname='{}'\n",
+        &input.email, &input.name
+    ))
 }

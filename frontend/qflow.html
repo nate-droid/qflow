@@ -5,19 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Quantum Workflow UI</title>
 
-    <!-- External Libraries -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.28.1/cytoscape.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dagre/0.8.5/dagre.min.js"></script>
     <script src="https://unpkg.com/cytoscape-dagre@2.5.0/cytoscape-dagre.js"></script>
     <script src="https://d3js.org/d3.v7.min.js"></script>
 
-    <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
 
-    <!-- Custom Styles -->
     <style>
         :root {
             --brand-color: #4f46e5; /* indigo-600 */
@@ -104,7 +101,6 @@
 </head>
 <body class="h-full">
 <div class="flex flex-col h-screen bg-slate-900">
-    <!-- Header -->
     <header class="bg-slate-900/70 backdrop-blur-sm border-b border-slate-700/80 p-4 shadow-lg z-20 flex justify-between items-center shrink-0">
         <div class="flex items-center gap-8">
             <h1 class="text-xl font-bold text-white">Quantum Workflow</h1>
@@ -121,15 +117,12 @@
         </div>
     </header>
 
-    <!-- Main Content -->
     <main id="svm-page" class="flex-1 overflow-y-auto p-8 hidden">
         <div class="max-w-4xl mx-auto">
             <h2 class="text-2xl font-bold text-white mb-2">Run a New Quantum SVM Experiment</h2>
             <p class="text-slate-400 mb-6">Specify the parameters for the QuantumSVMWorkflow and click "Run Experiment" to submit.</p>
 
-            <!-- Main Form -->
             <div class="space-y-8">
-                <!-- Dataset Section -->
                 <div class="p-6 bg-slate-800 rounded-lg border border-slate-700">
                     <h3 class="text-lg font-semibold text-indigo-400 mb-4">Dataset Configuration</h3>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -152,7 +145,6 @@
                     </div>
                 </div>
 
-                <!-- Kernel & Trainer Section -->
                 <div class="grid md:grid-cols-2 gap-8">
                     <div class="p-6 bg-slate-800 rounded-lg border border-slate-700">
                         <h3 class="text-lg font-semibold text-indigo-400 mb-4">Kernel</h3>
@@ -170,7 +162,6 @@
                     </div>
                 </div>
 
-                <!-- Output Section -->
                 <div class="p-6 bg-slate-800 rounded-lg border border-slate-700">
                     <h3 class="text-lg font-semibold text-indigo-400 mb-4">Output</h3>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -185,7 +176,6 @@
                     </div>
                 </div>
 
-                <!-- Submission & Status Section -->
                 <div class="pt-4 flex justify-end items-center gap-6">
                     <div id="svm-status-display" class="text-slate-400 flex items-center gap-3 hidden">
                         <svg id="svm-loading-indicator" class="animate-spin h-5 w-5 text-indigo-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
@@ -195,18 +185,15 @@
                 </div>
             </div>
 
-            <!-- Results Area -->
             <div id="results-area" class="mt-12 hidden">
                 <h2 class="text-2xl font-bold text-white mb-6">Results</h2>
                 <div class="space-y-8">
-                    <!-- Plot -->
                     <div>
                         <h3 class="text-lg font-semibold text-indigo-400 mb-4">Decision Boundary Plot</h3>
                         <div class="p-4 bg-slate-800 rounded-lg border border-slate-700 min-h-[300px] flex items-center justify-center">
                             <img id="result-plot" src="" alt="Decision Boundary Plot" class="max-w-full h-auto rounded">
                         </div>
                     </div>
-                    <!-- Metrics -->
                     <div>
                         <h3 class="text-lg font-semibold text-indigo-400 mb-4">Performance Metrics</h3>
                         <div class="p-4 bg-slate-950 rounded-lg border border-slate-700">
@@ -215,7 +202,6 @@
                     </div>
                 </div>
             </div>
-            <!-- Error Display -->
             <div id="svm-error-display" class="hidden mt-6 p-4 rounded-md bg-red-500/20 text-red-300 border border-red-500/30">
                 <h4 class="font-bold mb-2">An Error Occurred</h4>
                 <p id="svm-error-text" class="font-code text-sm"></p>
@@ -226,7 +212,6 @@
     <main id="visualizer-page" class="flex-1 flex overflow-hidden">
         <div id="cy-container" class="flex-1 relative">
             <div id="cy"></div>
-            <!-- Initial Fetch Overlay -->
             <div id="graph-overlay" class="absolute inset-0 bg-slate-900/80 flex items-center justify-center z-30 transition-opacity duration-300">
                 <div class="w-full max-w-md p-4 text-center">
                     <svg xmlns="http://www.w3.org/2000/svg" class="mx-auto h-12 w-12 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1"><path stroke-linecap="round" stroke-linejoin="round" d="M10 21h7a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v11m0 5l-2.293-2.293a1 1 0 010-1.414l7-7a1 1 0 011.414 0l7 7a1 1 0 010 1.414L15 21m-5-5h2m-1-4V5" /></svg>
@@ -240,20 +225,16 @@
                 </div>
             </div>
         </div>
-        <!-- Details Panel -->
         <aside id="details-panel" class="w-full md:w-1/3 lg:w-1/4 bg-slate-800/80 backdrop-blur-sm border-l border-slate-700/80 flex flex-col transition-all">
             <div class="p-6 overflow-y-auto flex-1">
                 <div id="details-content" class="transition-opacity duration-300 opacity-100">
                     <h2 id="details-title" class="text-xl font-bold text-white mb-6">Status: <span id="workflow-name-display" class="text-indigo-400 font-semibold">Idle</span></h2>
-                    <!-- Placeholder shown when no task is selected -->
                     <div id="details-placeholder" class="text-center text-slate-400 pt-10">
                         <svg xmlns="http://www.w3.org/2000/svg" class="mx-auto h-10 w-10 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9 5.25h.008v.008H12v-.008z" /></svg>
                         <p class="mt-2">Select a task node from the graph to view its details here.</p>
                         <p id="details-fetch-prompt" class="mt-4 text-sm text-slate-500 hidden">Fetch a workflow to begin.</p>
                     </div>
-                    <!-- Data shown when a task is selected -->
                     <div id="details-data" class="hidden space-y-5">
-                        <!-- Status Card -->
                         <div class="bg-slate-900/50 p-4 rounded-lg border border-slate-700">
                             <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-2">
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
@@ -262,7 +243,6 @@
                             <p id="details-status" class="font-code text-sm font-semibold"></p>
                         </div>
 
-                        <!-- Generic Quantum/Classical Details -->
                         <div id="quantum-classical-details" class="space-y-5">
                             <div class="bg-slate-900/50 p-4 rounded-lg border border-slate-700">
                                 <h3 id="details-circuit-title" class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-2">
@@ -280,7 +260,6 @@
                             </div>
                         </div>
 
-                        <!-- QCBM-Specific Details -->
                         <div id="qcbm-details" class="hidden space-y-5">
                             <div class="bg-slate-900/50 p-4 rounded-lg border border-slate-700">
                                 <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Image</h3>
@@ -311,7 +290,6 @@
             <div id="qcbm-notification" class="hidden p-4 mb-4 rounded-md"></div>
 
             <div class="space-y-6">
-                <!-- Workflow Info -->
                 <div class="p-6 bg-slate-800 rounded-lg border border-slate-700">
                     <h3 class="text-lg font-semibold text-indigo-400 mb-4">Workflow Details</h3>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -325,7 +303,6 @@
                         </div>
                     </div>
                 </div>
-                <!-- Task Spec -->
                 <div class="p-6 bg-slate-800 rounded-lg border border-slate-700">
                     <h3 class="text-lg font-semibold text-indigo-400 mb-4">Task Specification</h3>
                     <div class="space-y-4">
@@ -347,7 +324,6 @@
                         </div>
                     </div>
                 </div>
-                <!-- Optimizer -->
                 <div class="p-6 bg-slate-800 rounded-lg border border-slate-700">
                     <h3 class="text-lg font-semibold text-indigo-400 mb-4">Optimizer</h3>
                     <div class="space-y-4">
@@ -408,7 +384,6 @@
     </main>
 </div>
 
-<!-- Modals -->
 <div id="error-modal-overlay" class="modal-overlay">
     <div id="error-modal-content" class="modal-content" onclick="event.stopPropagation()"></div>
 </div>
@@ -417,7 +392,6 @@
     <div id="results-modal-content" class="modal-content" onclick="event.stopPropagation()">
         <button class="modal-close-btn" onclick="closeModal('results-modal-overlay')">&times;</button>
         <h2 id="results-modal-title" class="text-indigo-400 shrink-0">Task Results</h2>
-        <!-- Tabs -->
         <div class="border-b border-slate-600 mb-4 shrink-0">
             <nav id="results-tabs" class="-mb-px flex space-x-6" aria-label="Tabs">
                 <a href="#" id="tab-vis" class="whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm border-indigo-500 text-indigo-400">State Vector</a>
@@ -460,6 +434,26 @@
                 submitter: document.getElementById('qasm-submitter-page'),
             },
             pollingStatus: document.getElementById('polling-status'),
+            // SVM Page Elements
+            svm: {
+                runButton: document.getElementById('run-experiment-button'),
+                statusDisplay: document.getElementById('svm-status-display'),
+                statusText: document.getElementById('svm-status-text'),
+                errorDisplay: document.getElementById('svm-error-display'),
+                errorText: document.getElementById('svm-error-text'),
+                resultsArea: document.getElementById('results-area'),
+                resultPlot: document.getElementById('result-plot'),
+                resultMetrics: document.getElementById('result-metrics'),
+                // Form Inputs
+                dsGenerator: document.getElementById('ds-generator'),
+                dsSamples: document.getElementById('ds-samples'),
+                dsNoise: document.getElementById('ds-noise'),
+                dsTestSize: document.getElementById('ds-test-size'),
+                kernelImage: document.getElementById('kernel-image'),
+                trainerC: document.getElementById('trainer-c'),
+                outputModelName: document.getElementById('output-model-name'),
+                outputPlotName: document.getElementById('output-plot-name'),
+            },
             // Visualizer Page Elements
             visualizer: {
                 graphOverlay: document.getElementById('graph-overlay'),
@@ -736,7 +730,7 @@
 
                 } else {
                     qcDetails.classList.remove('hidden');
-                    qcbmDetails.classList.add('hidden');
+                    qcbmDetails.add('hidden');
 
                     if (task.quantum) {
                         details.circuitTitle.textContent = "Quantum Circuit (OpenQASM)";
@@ -989,10 +983,170 @@
         dom.qasm.submitButton.addEventListener('click', handleQasmSubmit);
 
         // --- SVM Logic ---
+        function stopSvmPolling() {
+            if (svmPollingIntervalId) {
+                clearTimeout(svmPollingIntervalId);
+                svmPollingIntervalId = null;
+            }
+        }
+
+        async function fetchSvmResults(workflowName, namespace) {
+            dom.svm.statusText.textContent = 'Fetching final results...';
+            // Assuming an endpoint that provides named artifacts.
+            // A real implementation might get artifact names from the workflow status.
+            const plotArtifactName = dom.svm.outputPlotName.value.trim();
+            const metricsArtifactName = "metrics.json"; // A reasonable default
+
+            try {
+                // Fetching artifacts might be two separate calls
+                const plotResponse = await fetch(`${API_BASE_URL}/api/workflows/${namespace}/${workflowName}/artifacts/${plotArtifactName}`);
+                const metricsResponse = await fetch(`${API_BASE_URL}/api/workflows/${namespace}/${workflowName}/artifacts/${metricsArtifactName}`);
+
+                if (!plotResponse.ok || !metricsResponse.ok) {
+                    throw new Error(`Failed to fetch artifacts. Plot: ${plotResponse.status}, Metrics: ${metricsResponse.status}`);
+                }
+
+                // Assuming plot is returned as a blob that we can convert to a data URL
+                const plotBlob = await plotResponse.blob();
+                dom.svm.resultPlot.src = URL.createObjectURL(plotBlob);
+
+                const metricsJson = await metricsResponse.json();
+                dom.svm.resultMetrics.textContent = JSON.stringify(metricsJson, null, 2);
+
+                // Show results and hide status
+                dom.svm.resultsArea.classList.remove('hidden');
+                dom.svm.statusDisplay.classList.add('hidden');
+                dom.svm.errorDisplay.classList.add('hidden');
+
+            } catch(error) {
+                console.error("Failed to fetch SVM results:", error);
+                dom.svm.errorText.textContent = `Could not fetch final results. Please check the visualizer for task status. Error: ${error.message}`;
+                dom.svm.errorDisplay.classList.remove('hidden');
+                dom.svm.statusDisplay.classList.add('hidden');
+            } finally {
+                dom.svm.runButton.disabled = false;
+            }
+        }
+
+        function pollSvmStatus(workflowName, namespace) {
+            stopSvmPolling(); // Ensure no multiple polling loops
+
+            svmPollingIntervalId = setTimeout(async () => {
+                const apiUrl = `${API_BASE_URL}/api/workflows/${workflowName}?namespace=${namespace}`;
+                try {
+                    const response = await fetch(apiUrl);
+                    if (!response.ok) {
+                        throw new Error(`Server responded with ${response.status}`);
+                    }
+                    const workflow = await response.json();
+                    const phase = workflow.status?.phase;
+
+                    dom.svm.statusText.textContent = `Status: ${phase || 'Unknown'}`;
+
+                    if (phase === 'Succeeded') {
+                        stopSvmPolling();
+                        fetchSvmResults(workflowName, namespace);
+                    } else if (phase === 'Failed' || phase === 'Error') {
+                        stopSvmPolling();
+                        dom.svm.errorText.textContent = workflow.status?.message || `Workflow ${phase}. Check logs for details.`;
+                        dom.svm.errorDisplay.classList.remove('hidden');
+                        dom.svm.statusDisplay.classList.add('hidden');
+                        dom.svm.runButton.disabled = false;
+                    } else {
+                        // If still running/pending, poll again
+                        pollSvmStatus(workflowName, namespace);
+                    }
+
+                } catch (error) {
+                    console.error("Polling failed:", error);
+                    stopSvmPolling();
+                    dom.svm.errorText.textContent = `Error polling workflow status: ${error.message}.`;
+                    dom.svm.errorDisplay.classList.remove('hidden');
+                    dom.svm.statusDisplay.classList.add('hidden');
+                    dom.svm.runButton.disabled = false;
+                }
+            }, 5000); // Poll every 5 seconds
+        }
+
         async function handleRunExperiment() {
-            // This function is currently non-operational as the backend doesn't support it.
+            stopSvmPolling();
+
+            // 1. Reset UI
+            dom.svm.runButton.disabled = true;
+            dom.svm.statusDisplay.classList.remove('hidden');
+            dom.svm.statusText.textContent = 'Submitting workflow...';
+            dom.svm.errorDisplay.classList.add('hidden');
+            dom.svm.resultsArea.classList.add('hidden');
+
+
+            // 2. Construct Payload from form data
+            // We assume the backend has a controller that understands this high-level `qsvm` spec
+            const payload = {
+                apiVersion: "qflow.io/v1alpha1",
+                kind: "QuantumWorkflow",
+                metadata: {
+                    name: `qsvm-${dom.svm.outputModelName.value.trim()}-${Date.now()}`,
+                    namespace: "default" // Assuming default namespace
+                },
+                spec: {
+                    tasks: [{
+                        name: "quantum-svm-pipeline", // A single, high-level task name
+                        spec: {
+                            qsvm: {
+                                dataset: {
+                                    generator: dom.svm.dsGenerator.value,
+                                    samples: parseInt(dom.svm.dsSamples.value, 10),
+                                    noise: parseFloat(dom.svm.dsNoise.value),
+                                    test_size: parseFloat(dom.svm.dsTestSize.value)
+                                },
+                                kernel: {
+                                    image: dom.svm.kernelImage.value
+                                },
+                                trainer: {
+                                    c: parseFloat(dom.svm.trainerC.value)
+                                },
+                                output: {
+                                    model_name: dom.svm.outputModelName.value,
+                                    plot_name: dom.svm.outputPlotName.value
+                                }
+                            }
+                        }
+                    }]
+                }
+            };
+
+            const namespace = payload.metadata.namespace;
+            const apiUrl = `${API_BASE_URL}/api/workflows/${namespace}/new`;
+
+            // 3. Submit to backend
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`Server responded with ${response.status}. Message: ${errorText || 'No details provided.'}`);
+                }
+
+                const result = await response.json();
+                dom.svm.statusText.textContent = 'Workflow submitted. Waiting for completion...';
+
+                // 4. Start polling for status
+                pollSvmStatus(result.metadata.name, result.metadata.namespace);
+
+            } catch (error) {
+                console.error("Failed to submit SVM experiment:", error);
+                dom.svm.errorText.textContent = error.message;
+                dom.svm.errorDisplay.classList.remove('hidden');
+                dom.svm.statusDisplay.classList.add('hidden');
+                dom.svm.runButton.disabled = false;
+            }
         }
         dom.svm.runButton.addEventListener('click', handleRunExperiment);
+
 
         // --- Initial Page Load ---
         showPage('visualizer');
