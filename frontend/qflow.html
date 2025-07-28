@@ -1008,8 +1008,70 @@
 
         // --- QASM Submitter Logic ---
         async function handleQasmSubmit() {
-            // This function is currently non-operational as the backend doesn't support it.
+            const workflowName = dom.qasm.nameInput.value.trim();
+            const namespace = dom.qasm.namespaceInput.value.trim();
+            const qasmCode = dom.qasm.input.value.trim();
+
+            if (!workflowName || !namespace || !qasmCode) {
+                showQasmNotification('Please fill in all required fields.', 'error');
+                return;
+            }
+
+            dom.qasm.submitButton.textContent = 'Submitting...';
+            dom.qasm.submitButton.disabled = true;
+
+            const apiUrl = `${API_BASE_URL}/api/workflows/${namespace}/${workflowName}/qasm`;
+
+            try {
+                // Encode the QASM code as application/x-www-form-urlencoded
+                const body = `qasm_data=${encodeURIComponent(qasmCode)}`;
+
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded'
+                    },
+                    body: body
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`Server responded with ${response.status}. Message: ${errorText}`);
+                }
+
+                showQasmNotification(`Workflow "${workflowName}" created successfully! Switching to visualizer...`, 'success');
+
+                setTimeout(() => {
+                    dom.visualizer.workflowInput.value = workflowName;
+                    dom.visualizer.namespaceInput.value = namespace;
+                    showPage('visualizer');
+                    handleFetchWorkflow(false);
+                    dom.qasm.notification.classList.add('hidden');
+                }, 2000);
+
+            } catch (error) {
+                showQasmNotification(`Error: ${error.message}`, 'error');
+            } finally {
+                dom.qasm.submitButton.textContent = 'Submit Workflow';
+                dom.qasm.submitButton.disabled = false;
+            }
         }
+
+
+        function showQasmNotification(message, type = 'success') {
+            const notification = dom.qasm.notification;
+            notification.textContent = message;
+            notification.className = 'p-4 mb-4 rounded-md'; // Reset classes
+            if (type === 'success') {
+                notification.classList.add('bg-green-500/20', 'text-green-300');
+            } else {
+                notification.classList.add('bg-red-500/20', 'text-red-300');
+            }
+            notification.classList.remove('hidden');
+        }
+
+        dom.qasm.submitButton.addEventListener('click', handleQasmSubmit);
+
         dom.qasm.submitButton.addEventListener('click', handleQasmSubmit);
 
         // --- SVM Logic ---

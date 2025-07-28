@@ -1,18 +1,23 @@
-use axum::{extract::{Path, Query, State}, http::StatusCode, routing::{get}, Form, Json, Router};
-use k8s_openapi::api::{batch::v1::Job, core::v1::Pod};
-use kube::{
-    api::{Api, ListParams, LogParams, PostParams},
-    Client, CustomResource,
-};
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, sync::Arc};
 use axum::extract::Request;
 use axum::response::Html;
 use axum::routing::post;
+use axum::{
+    Form, Json, Router,
+    extract::{Path, Query, State},
+    http::StatusCode,
+    routing::get,
+};
+use k8s_openapi::api::{batch::v1::Job, core::v1::Pod};
+use kube::{
+    Client, CustomResource,
+    api::{Api, ListParams, LogParams, PostParams},
+};
+use qflow_types::{QFlowTaskSpec, QuantumSVMWorkflowSpec, QuantumWorkflow, QuantumWorkflowSpec};
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
+use std::{collections::HashMap, sync::Arc};
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::TraceLayer;
-use qflow_types::{QFlowTaskSpec, QuantumSVMWorkflowSpec, QuantumWorkflow, QuantumWorkflowSpec};
 
 fn default_epochs() -> i32 {
     100
@@ -104,20 +109,22 @@ async fn main() {
             get(fetch_task_results),
         )
         .route("/api/workflows/{namespace}/new", post(submit_workflow))
-        .layer(TraceLayer::new_for_http()
-            .make_span_with(|req: &Request| {
-                let method = req.method().clone();
-                let uri = req.uri().clone();
-                println!("Received request: {} {}", method, uri);
+        .layer(
+            TraceLayer::new_for_http()
+                .make_span_with(|req: &Request| {
+                    let method = req.method().clone();
+                    let uri = req.uri().clone();
+                    println!("Received request: {} {}", method, uri);
 
-                println!("{:#?}", req);
-                tracing::debug_span!(
-                    "request",
-                    method = %method,
-                    uri = %uri,
-                    headers = ?req.headers(),
-                )
-            }).on_failure(())
+                    println!("{:#?}", req);
+                    tracing::debug_span!(
+                        "request",
+                        method = %method,
+                        uri = %uri,
+                        headers = ?req.headers(),
+                    )
+                })
+                .on_failure(()),
         )
         // This endpoint remains hypothetical as it depends on a `qflowc` library
         .route("/api/workflows/{namespace}/{name}/qasm", post(submit_qasm))
@@ -139,10 +146,7 @@ async fn fetch_workflow(
 
     // 1. Fetch the source of truth: the QuantumWorkflow CR
     let workflow_cr = wf_api.get(&workflow_name).await.map_err(|e| {
-        eprintln!(
-            "Error fetching QuantumWorkflow '{}': {}",
-            workflow_name, e
-        );
+        eprintln!("Error fetching QuantumWorkflow '{}': {}", workflow_name, e);
         StatusCode::NOT_FOUND
     })?;
 
@@ -155,10 +159,7 @@ async fn fetch_workflow(
     let mut job_status_map: HashMap<String, String> = HashMap::new();
     for job in all_jobs.items {
         if let Some(owner_refs) = job.metadata.owner_references.as_ref() {
-            if owner_refs
-                .iter()
-                .any(|owner| owner.name == workflow_name)
-            {
+            if owner_refs.iter().any(|owner| owner.name == workflow_name) {
                 // This job belongs to our workflow. Find its task name from the label.
                 if let Some(labels) = job.metadata.labels {
                     if let Some(task_name) = labels.get("qflow.io/task-name") {
@@ -168,7 +169,7 @@ async fn fetch_workflow(
                             Some(s) if s.active.map_or(false, |c| c > 0) => "Running",
                             _ => "Pending",
                         }
-                            .to_string();
+                        .to_string();
                         job_status_map.insert(task_name.clone(), status_str);
                     }
                 }
@@ -184,12 +185,14 @@ async fn fetch_workflow(
         let task_name = task_from_cr.name.clone();
 
         let (quantum, classical, qcbm) = match task_from_cr.spec {
-            QFlowTaskSpec::Classical { image } => (
-                None,
-                Some(serde_json::json!({ "image": image })),
-                None,
-            ),
-            QFlowTaskSpec::Quantum { image, circuit, params } => (
+            QFlowTaskSpec::Classical { image } => {
+                (None, Some(serde_json::json!({ "image": image })), None)
+            }
+            QFlowTaskSpec::Quantum {
+                image,
+                circuit,
+                params,
+            } => (
                 Some(serde_json::json!({
                     "image": image,
                     "circuit": circuit,
@@ -227,7 +230,9 @@ async fn fetch_workflow(
             namespace: params.namespace,
         },
         spec: Spec { tasks },
-        status: Status { task_status: task_status_map },
+        status: Status {
+            task_status: task_status_map,
+        },
     };
 
     Ok(Json(response))
@@ -246,9 +251,13 @@ async fn fetch_task_results(
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
-    let job_name = job_list.items.into_iter()
+    let job_name = job_list
+        .items
+        .into_iter()
         .find(|job| {
-            job.metadata.labels.as_ref().map_or(false, |labels| labels.get("qflow.io/task-name") == Some(&task_name))
+            job.metadata.labels.as_ref().map_or(false, |labels| {
+                labels.get("qflow.io/task-name") == Some(&task_name)
+            })
         })
         .and_then(|job| job.metadata.name);
 
@@ -260,7 +269,6 @@ async fn fetch_task_results(
         }
     };
 
-
     let pod_label = format!("job-name={}", job_name);
     let lp = ListParams::default().labels(&pod_label);
 
@@ -270,11 +278,11 @@ async fn fetch_task_results(
     })?;
 
     // Find a succeeded pod to fetch logs from
-    if let Some(pod) = pod_list
-        .items
-        .into_iter()
-        .find(|p| p.status.as_ref().map_or(false, |s| s.phase == Some("Succeeded".to_string())))
-    {
+    if let Some(pod) = pod_list.items.into_iter().find(|p| {
+        p.status
+            .as_ref()
+            .map_or(false, |s| s.phase == Some("Succeeded".to_string()))
+    }) {
         if let Some(pod_name) = &pod.metadata.name {
             let logs = pods
                 .logs(pod_name, &LogParams::default())
@@ -303,10 +311,8 @@ async fn submit_workflow(
     Path((namespace)): Path<(String)>,
     Json(workflow): Json<QuantumWorkflowSpec>,
 ) -> Result<StatusCode, StatusCode> {
-
     // check the workflow
     println!("Submitting workflow '{:?}'", workflow);
-
 
     let wf_api: Api<QuantumWorkflow> = Api::namespaced(state.client.clone(), &namespace);
 
@@ -325,7 +331,10 @@ async fn submit_workflow(
     };
 
     // Create or update the QuantumWorkflow CR
-    match wf_api.create(&PostParams::default(), &quantum_workflow).await {
+    match wf_api
+        .create(&PostParams::default(), &quantum_workflow)
+        .await
+    {
         Ok(_) => Ok(StatusCode::CREATED),
         Err(e) => {
             eprintln!("Error submitting workflow: {}", e);
@@ -337,13 +346,54 @@ async fn submit_workflow(
 async fn submit_qasm(
     State(state): State<Arc<AppState>>,
     Path((namespace, workflow_name)): Path<(String, String)>,
-    Form(qasm_data): Form<String>,
+    Form(form): Form<HashMap<String, String>>,
 ) -> Result<StatusCode, StatusCode> {
-    // This endpoint is hypothetical and would require a `qflowc` library to handle QASM submission
-    // For now, we just log the QASM data and return OK
-    println!("Submitting QASM for workflow '{}': {}", workflow_name, qasm_data);
+    let qasm_data = form.get("qasm_data").cloned().unwrap_or_default();
+    println!(
+        "Submitting QASM for workflow '{}': {}",
+        workflow_name, qasm_data
+    );
 
-    // Here you would typically convert the QASM to a QuantumWorkflow CR and submit it
-    // For now, we just return OK
-    Ok(StatusCode::OK)
+    // Construct a Quantum task using the QASM string
+    let quantum_task = qflow_types::QFlowTask {
+        name: "qasm-task".to_string(),
+        depends_on: None,
+        spec: qflow_types::QFlowTaskSpec::Quantum {
+            image: "your-quantum-image:latest".to_string(), // <-- Replace with your actual image
+            circuit: qasm_data.clone(),
+            params: "".to_string(), // You may want to parse/accept params separately
+        },
+    };
+
+    // Build the workflow spec
+    let workflow_spec = qflow_types::QuantumWorkflowSpec {
+        volume: None,
+        tasks: vec![quantum_task],
+    };
+
+    // Build the QuantumWorkflow CR
+    let quantum_workflow = qflow_types::QuantumWorkflow {
+        metadata: kube::api::ObjectMeta {
+            name: Some(workflow_name.clone()),
+            namespace: Some(namespace.clone()),
+            ..Default::default()
+        },
+        spec: workflow_spec,
+        status: Default::default(),
+    };
+
+    // Submit to Kubernetes
+    let wf_api: Api<qflow_types::QuantumWorkflow> =
+        Api::namespaced(state.client.clone(), &namespace);
+
+    match wf_api
+        .create(&PostParams::default(), &quantum_workflow)
+        .await
+    {
+        Ok(_) => Ok(StatusCode::CREATED),
+        Err(e) => {
+            eprintln!("Error submitting QASM workflow: {}", e);
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
+    }
 }
