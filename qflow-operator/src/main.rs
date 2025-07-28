@@ -158,11 +158,11 @@ fn create_job_for_task(
                     ..Default::default()
                 });
             }
-
+            let default_image = "qsim:latest".to_string();
             let input_file_path = "/workspace/input/circuit.qasm";
             Container {
                 name: "task-runner".to_string(),
-                image: Some(image.clone()),
+                image: Some(default_image),
                 command: Some(vec!["/qsim".to_string()]),
                 args: Some(vec![
                     "--input-file".to_string(),
@@ -261,7 +261,8 @@ async fn reconcile(wf: Arc<QuantumWorkflow>, ctx: Arc<Context>) -> Result<Action
     let cm_api = Api::<ConfigMap>::namespaced(client.clone(), &ns);
 
     // 1. Initialize status and PVC if they don't exist
-    if wf.status.is_none() || wf.status.as_ref().unwrap().task_statuses.is_none() {
+    // if wf.status.is_none() || wf.status.as_ref().unwrap().task_statuses.is_none() {
+    if wf.status.is_none() {
         info!(
             "Initializing status for workflow '{}'",
             wf.metadata.name.clone().unwrap()
@@ -308,11 +309,9 @@ async fn reconcile(wf: Arc<QuantumWorkflow>, ctx: Arc<Context>) -> Result<Action
     let mut current_statuses = wf
         .status
         .as_ref()
-        .unwrap()
-        .task_statuses
-        .as_ref()
-        .unwrap()
-        .clone();
+        .and_then(|s| s.task_statuses.as_ref())
+        .cloned()
+        .unwrap_or_default();
     let mut made_change = false;
 
     // Check running jobs
@@ -336,6 +335,14 @@ async fn reconcile(wf: Arc<QuantumWorkflow>, ctx: Arc<Context>) -> Result<Action
         }
     }
 
+    // Ensure every task is present in current_statuses, defaulting to Pending if missing
+    for task in &wf.spec.tasks {
+        let task_name = &task.name;
+        if !current_statuses.contains_key(task_name) {
+            current_statuses.insert(task_name.clone(), TASK_PENDING.to_string());
+        }
+    }
+
     // Start new jobs
     let mut topo = Topo::new(&graph);
     while let Some(node_idx) = topo.next(&graph) {
@@ -351,21 +358,45 @@ async fn reconcile(wf: Arc<QuantumWorkflow>, ctx: Arc<Context>) -> Result<Action
                 info!("Dependencies met for task '{}', starting job.", task_name);
                 let cm_name = if let QFlowTaskSpec::Quantum { circuit, params, .. } = &task.spec {
                     let cm_name = format!("{}-{}-cm", wf.metadata.name.clone().unwrap(), task.name);
-                    let cm = ConfigMap {
-                        metadata: ObjectMeta { name: Some(cm_name.clone()), owner_references: Some(vec![wf.controller_owner_ref(&()).unwrap()]), ..Default::default() },
-                        data: Some([("circuit.qasm".to_string(), circuit.clone()), ("params.json".to_string(), params.clone())].into()),
-                        ..Default::default()
-                    };
-                    cm_api.create(&PostParams::default(), &cm).await?;
+                    // Ignore if exists logic for ConfigMap
+                    match cm_api.get(&cm_name).await {
+                        Ok(_) => {
+                            info!("ConfigMap '{}' already exists, skipping creation.", cm_name);
+                        },
+                        Err(_) => {
+                            let cm = ConfigMap {
+                                metadata: ObjectMeta { name: Some(cm_name.clone()), owner_references: Some(vec![wf.controller_owner_ref(&()).unwrap()]), ..Default::default() },
+                                data: Some([("circuit.qasm".to_string(), circuit.clone()), ("params.json".to_string(), params.clone())].into()),
+                                ..Default::default()
+                            };
+                            cm_api.create(&PostParams::default(), &cm).await?;
+                        }
+                    }
                     Some(cm_name)
-                } else { None };
+                } else {
+                    None
+                };
 
                 // This single function call now handles all task types
-                let job = create_job_for_task(&wf, task, cm_name)?;
-                job_api.create(&PostParams::default(), &job).await?;
+                let job_name = format!("{}-{}", wf.metadata.name.clone().unwrap(), task_name);
+                match job_api.get(&job_name).await {
+                    Ok(_) => {
+                        info!("Job '{}' already exists, skipping creation.", job_name);
+                    },
+                    Err(_) => {
+                        let job = create_job_for_task(&wf, task, cm_name)?;
+                        job_api.create(&PostParams::default(), &job).await?;
+                    }
+                }
                 current_statuses.insert(task_name.clone(), TASK_RUNNING.to_string());
                 made_change = true;
             }
+        } else {
+            // print all current statuses
+            for (task_name, current_status) in &current_statuses {
+                println!("Task '{}' depends on '{}'", task_name, current_status);
+            }
+            println!("task: '{}', status: '{:?}'", task_name, current_statuses.get(task_name));
         }
     }
 
