@@ -46,7 +46,6 @@ fn main() -> io::Result<()> {
     let cli = Cli::parse();
     println!("starting a QFlow job");
 
-    // Read the QASM input from a file or stdin
     let mut qasm_input = String::new();
     if let Some(input_path) = cli.input_file {
         qasm_input = fs::read_to_string(input_path)?;
@@ -55,14 +54,11 @@ fn main() -> io::Result<()> {
         io::stdin().read_to_string(&mut qasm_input)?;
     }
     println!("attempting to run: \n {:?}", qasm_input);
-
-    // Determine the output writer (file or stdout)
+    
     if let Some(events) = run_simulation(&qasm_input) {
-        // Serialize the entire event vector into a single JSON string
         let json_output = serde_json::to_string_pretty(&events)
             .expect("Failed to serialize simulation result to JSON.");
-
-        // Determine the output writer (file or stdout) and write the result
+        
         if let Some(output_path) = cli.output_file {
             let file = File::create(output_path)?;
             let mut writer = BufWriter::new(file);

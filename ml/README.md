@@ -34,3 +34,11 @@ Then, you can build the bindings with:
 ```bash
 maturin develop
 ```
+
+# TODO sort
+
+create dummy data for testing
+
+python svm2.py --create-dummy-data blobs_data.csv --dummy-type blobs
+
+python svm2.py --data_path blobs_data.csv --target-column "target" --output-plot local_plot.png --output-metrics local_metrics.txt

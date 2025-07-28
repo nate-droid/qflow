@@ -111,7 +111,6 @@ async fn main() {
                 println!("Received request: {} {}", method, uri);
 
                 println!("{:#?}", req);
-
                 tracing::debug_span!(
                     "request",
                     method = %method,
@@ -121,7 +120,7 @@ async fn main() {
             }).on_failure(())
         )
         // This endpoint remains hypothetical as it depends on a `qflowc` library
-        // .route("/api/workflows/{namespace}/{name}/qasm", post(submit_qasm))
+        .route("/api/workflows/{namespace}/{name}/qasm", post(submit_qasm))
         .with_state(app_state)
         .layer(cors);
 
@@ -335,16 +334,16 @@ async fn submit_workflow(
     }
 }
 
-#[derive(Deserialize, Debug)]
-#[allow(dead_code)]
-struct Input {
-    name: String,
-    email: String,
-}
-async fn accept_form(Form(input): Form<Input>) -> Html<String> {
-    dbg!(&input);
-    Html(format!(
-        "email='{}'\nname='{}'\n",
-        &input.email, &input.name
-    ))
+async fn submit_qasm(
+    State(state): State<Arc<AppState>>,
+    Path((namespace, workflow_name)): Path<(String, String)>,
+    Form(qasm_data): Form<String>,
+) -> Result<StatusCode, StatusCode> {
+    // This endpoint is hypothetical and would require a `qflowc` library to handle QASM submission
+    // For now, we just log the QASM data and return OK
+    println!("Submitting QASM for workflow '{}': {}", workflow_name, qasm_data);
+
+    // Here you would typically convert the QASM to a QuantumWorkflow CR and submit it
+    // For now, we just return OK
+    Ok(StatusCode::OK)
 }

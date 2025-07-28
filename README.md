@@ -28,4 +28,3 @@ cat qflow-operator/tests/dag-test.qflow | cargo run -p qflowc | kubectl apply -f
 
 - Explore the `examples/` folders in `qsim/` and `qflowc/` for sample circuits and workflows.
 - See individual component READMEs for more details.
-- The code is intended to be self-explanatory and modular—feel free to dive in.
