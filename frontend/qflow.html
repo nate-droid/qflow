@@ -113,6 +113,7 @@
                 <a id="nav-visualizer" class="nav-link active">Workflow Visualizer</a>
                 <a id="nav-qcbm" class="nav-link">Submit QCBM</a>
                 <a id="nav-submitter" class="nav-link">Submit QASM</a>
+                <a id="nav-ml" class="nav-link">Run ML SVM</a>
             </nav>
         </div>
         <div id="polling-status" class="text-sm text-slate-400 items-center gap-2 hidden">
@@ -406,6 +407,36 @@
             </div>
         </div>
     </main>
+
+    <main id="ml-page" class="flex-1 overflow-y-auto p-8 hidden">
+        <div class="max-w-4xl mx-auto">
+            <h2 class="text-2xl font-bold text-white mb-2">Run Classical/Quantum SVM</h2>
+            <p class="text-slate-400 mb-6">Upload a CSV or use dummy data, set parameters, and run the workflow.</p>
+            <div class="space-y-4">
+                <div>
+                    <label for="ml-data-file" class="block text-sm font-medium text-slate-300 mb-1">CSV Data File</label>
+                    <input type="file" id="ml-data-file" class="bg-slate-800 border border-slate-600 rounded-md py-2 px-3 text-white w-full">
+                </div>
+                <div>
+                    <label for="ml-target-column" class="block text-sm font-medium text-slate-300 mb-1">Target Column</label>
+                    <input type="text" id="ml-target-column" class="bg-slate-800 border border-slate-600 rounded-md py-2 px-3 text-white w-full" value="target">
+                </div>
+                <div>
+                    <label for="ml-test-size" class="block text-sm font-medium text-slate-300 mb-1">Test Size</label>
+                    <input type="number" id="ml-test-size" class="bg-slate-800 border border-slate-600 rounded-md py-2 px-3 text-white w-full" value="0.3" step="0.01" min="0.05" max="0.95">
+                </div>
+                <div class="flex justify-end">
+                    <button id="ml-run-button" class="btn btn-primary">Run SVM</button>
+                </div>
+            </div>
+            <div id="ml-results-area" class="mt-8 hidden">
+                <h3 class="text-lg font-semibold text-indigo-400 mb-4">Results</h3>
+                <div id="ml-metrics" class="bg-slate-950 rounded-md p-3 text-sm font-code text-slate-300"></div>
+                <img id="ml-plot" src="" alt="SVM Decision Boundary" class="max-w-full h-auto rounded mt-4">
+            </div>
+            <div id="ml-error-display" class="hidden mt-6 p-4 rounded-md bg-red-500/20 text-red-300 border border-red-500/30"></div>
+        </div>
+    </main>
 </div>
 
 <!-- Modals -->
@@ -523,6 +554,13 @@
                 input: document.getElementById('qasm-input'),
                 submitButton: document.getElementById('qasm-submit-button'),
             },
+            ml: {
+                runButton: document.getElementById('ml-run-button'),
+                metrics: document.getElementById('ml-metrics'),
+                plot: document.getElementById('ml-plot'),
+                resultsArea: document.getElementById('ml-results-area'),
+                errorDisplay: document.getElementById('ml-error-display'),
+            },
             // Shared Modals
             errorModal: {
                 overlay: document.getElementById('error-modal-overlay'),
@@ -558,6 +596,10 @@
         dom.nav.visualizer.addEventListener('click', () => showPage('visualizer'));
         dom.nav.qcbm.addEventListener('click', () => showPage('qcbm'));
         dom.nav.submitter.addEventListener('click', () => showPage('submitter'));
+        dom.nav.ml = document.getElementById('nav-ml');
+        dom.pages.ml = document.getElementById('ml-page');
+        dom.nav.ml.addEventListener('click', () => showPage('ml'));
+
 
         // --- Modal Logic ---
         function showModal(modal, title, content) {
@@ -655,6 +697,56 @@
                 }
             }
         }
+
+        async function handleMlRun() {
+            const fileInput = document.getElementById('ml-data-file');
+            const targetColumn = document.getElementById('ml-target-column').value.trim();
+            const testSize = document.getElementById('ml-test-size').value;
+
+            if (!targetColumn || !testSize) {
+                showMlError('Please fill in all required fields.');
+                return;
+            }
+
+            const formData = new FormData();
+            if (fileInput.files.length > 0) {
+                formData.append('data_file', fileInput.files[0]);
+            }
+            formData.append('target_column', targetColumn);
+            formData.append('test_size', testSize);
+
+            dom.ml.runButton.textContent = 'Running...';
+            dom.ml.runButton.disabled = true;
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/ml/svm`, {
+                    method: 'POST',
+                    body: formData
+                });
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`Server responded with ${response.status}. Message: ${errorText}`);
+                }
+                const result = await response.json();
+                dom.ml.metrics.textContent = result.metrics;
+                dom.ml.plot.src = `data:image/png;base64,${result.plot_base64}`;
+                dom.ml.resultsArea.classList.remove('hidden');
+                dom.ml.errorDisplay.classList.add('hidden');
+            } catch (error) {
+                showMlError(error.message);
+            } finally {
+                dom.ml.runButton.textContent = 'Run SVM';
+                dom.ml.runButton.disabled = false;
+            }
+        }
+
+        function showMlError(msg) {
+            dom.ml.errorDisplay.textContent = msg;
+            dom.ml.errorDisplay.classList.remove('hidden');
+        }
+
+        document.getElementById('ml-run-button').addEventListener('click', handleMlRun);
+
 
         function renderGraph(workflow) {
             const elements = [];

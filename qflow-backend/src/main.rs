@@ -1,3 +1,4 @@
+use axum::extract::Multipart;
 use axum::extract::Request;
 use axum::response::Html;
 use axum::routing::post;
@@ -15,7 +16,11 @@ use kube::{
 use qflow_types::{QFlowTaskSpec, QuantumSVMWorkflowSpec, QuantumWorkflow, QuantumWorkflowSpec};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use std::process::Stdio;
 use std::{collections::HashMap, sync::Arc};
+use std::io::Write;
+use tempfile::NamedTempFile;
+use tokio::io::AsyncReadExt;
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::TraceLayer;
 
@@ -109,6 +114,7 @@ async fn main() {
             get(fetch_task_results),
         )
         .route("/api/workflows/{namespace}/new", post(submit_workflow))
+        .route("/api/ml/svm", axum::routing::post(run_ml_svm))
         .layer(
             TraceLayer::new_for_http()
                 .make_span_with(|req: &Request| {
@@ -396,4 +402,116 @@ async fn submit_qasm(
             Err(StatusCode::INTERNAL_SERVER_ERROR)
         }
     }
+}
+
+#[derive(Deserialize)]
+struct MlSvmParams {
+    test_size: f64,
+    target_column: String,
+    // ... other params
+}
+
+#[derive(Serialize)]
+struct MlSvmResult {
+    metrics: String,
+    plot_base64: String,
+}
+
+async fn run_ml_svm(
+    State(_state): State<Arc<AppState>>,
+    mut multipart: Multipart,
+) -> Result<Json<MlSvmResult>, StatusCode> {
+    // --- 1. Parse multipart form ---
+    let mut csv_path = None;
+    let mut target_column = None;
+    let mut test_size = None;
+
+    while let Some(field) = multipart.next_field().await.unwrap() {
+        let name = field.name().unwrap_or("");
+        match name {
+            "data_file" => {
+                let mut file =
+                    NamedTempFile::new().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+                let data = field
+                    .bytes()
+                    .await
+                    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+                file.write_all(&data)
+                    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+                csv_path = Some(file.into_temp_path());
+            }
+            "target_column" => {
+                target_column = Some(field.text().await.unwrap_or_default());
+            }
+            "test_size" => {
+                test_size = Some(field.text().await.unwrap_or_default());
+            }
+            _ => {}
+        }
+    }
+
+    let csv_path = csv_path.ok_or(StatusCode::BAD_REQUEST)?;
+    let target_column = target_column.ok_or(StatusCode::BAD_REQUEST)?;
+    let test_size = test_size.ok_or(StatusCode::BAD_REQUEST)?;
+
+    // --- 2. Prepare output paths ---
+    let metrics_path = csv_path.with_extension("metrics.txt");
+    let plot_path = csv_path.with_extension("plot.png");
+
+    // --- 3. Run Python script ---
+    let python_args = [
+        "ml/svm2.py",
+        "--data_path",
+        csv_path.to_str().unwrap(),
+        "--target-column",
+        &target_column,
+        "--output-plot",
+        plot_path.to_str().unwrap(),
+        "--output-metrics",
+        metrics_path.to_str().unwrap(),
+        "--test-size",
+        &test_size,
+    ];
+
+    let output = tokio::process::Command::new("/Users/nathaniel.ham/RustroverProjects/qflow/ml/venv/bin/python")
+        .args(&python_args)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output()
+        .await
+        .map_err(|e| { eprintln!("Python process error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR });
+
+    let output = match output {
+        Ok(output) => output,
+        Err(status) => {
+            println!("Error while running ml_svm: {:?}", status);
+            return Err(StatusCode::INTERNAL_SERVER_ERROR)
+        },
+    };
+
+    if !output.status.success() {
+        let err = String::from_utf8_lossy(&output.stderr);
+        eprintln!("Python error: {}", err);
+        return Err(StatusCode::INTERNAL_SERVER_ERROR);
+    }
+
+    // --- 4. Read metrics and plot ---
+    let metrics = tokio::fs::read_to_string(&metrics_path)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let mut plot_file = tokio::fs::File::open(&plot_path)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let mut plot_bytes = Vec::new();
+    plot_file
+        .read_to_end(&mut plot_bytes)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let plot_base64 = base64::encode(&plot_bytes);
+
+    Ok(Json(MlSvmResult {
+        metrics,
+        plot_base64,
+    }))
 }

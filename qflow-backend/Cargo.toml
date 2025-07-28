@@ -4,16 +4,17 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-axum = "0.8.4"
+axum = { version = "0.8.4" , features = ["multipart"]}
 tokio = { version = "1.46.1", features = ["full"] }
 kube = { version = "1.1.0", features = ["runtime", "derive"] }
 k8s-openapi = { version = "0.25.0", default-features = false, features = ["v1_30"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tower-http = { version = "0.6.6", features = ["cors"] } # Add this line
-
+tempfile = "3.11.0"
 qflowc = { path = "../qflowc" }
 qflow-types = { path = "../qflow-types" }
 serde_yaml = "0.9.34+deprecated"
 schemars = { version = "1.0.4", features = ["derive"] }
 tracing = "0.1.41"
+base64 = "0.22.1"
