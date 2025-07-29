@@ -51,7 +51,7 @@ it easier for users to reason about what the actual problems they are looking to
 The following image shows the results of running against the "make_circles" dataset from scikit-learn. You can find out 
 more about the experiment in the `ml/` directory.
 
-![SVM Results](results/local_plot.png)
+![SVM Results](./ml/results/local_plot.png)
 
 
 ## Next Steps
