@@ -35,6 +35,12 @@ Then, you can build the bindings with:
 maturin develop
 ```
 
+# Example Results
+
+The following image shows the results of running against the "make_circles" dataset from scikit-learn.
+
+![SVM Results](results/local_plot.png)
+
 # TODO sort
 
 create dummy data for testing

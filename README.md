@@ -1,7 +1,9 @@
 # QFlow
 
 QFlow is a Kubernetes-native dataflow system for running quantum circuits and integrating their results into classical 
-pipelines. It is designed to be practical, minimal, and easy to explore for developers interested in quantum workflows.
+pipelines. It is designed to be practical, minimal, and easy to explore for developers interested in quantum workflows. 
+The quantum simulator is already capable of parsing and running OpenQASM files, and the QFlow DSL allows users to define 
+quantum workflows in a simple way.
 
 Some of the capabilities include:
 - **Quantum Circuit Execution**: Run quantum circuits using a simulator (by default, uses my own).
@@ -43,6 +45,13 @@ As I often have limited free time, this kinda let me tackle a few things at once
 
 I've always loved taking complex problems and making them simpler for users. When applied correctly, abstractions can make
 it easier for users to reason about what the actual problems they are looking to solve are.
+
+# Example Results
+
+The following image shows the results of running against the "make_circles" dataset from scikit-learn. You can find out 
+more about the experiment in the `ml/` directory.
+
+![SVM Results](results/local_plot.png)
 
 
 ## Next Steps
