@@ -1,0 +1,20 @@
+/* src/index.css */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+    --brand-color: #4f46e5; /* indigo-600 */
+    --brand-color-hover: #4338ca; /* indigo-700 */
+    /* ...all other variables from qflow.html... */
+}
+
+body {
+    font-family: 'Inter', sans-serif;
+    color: var(--text-primary);
+    background-color: var(--bg-primary); /* Ensures background is consistent */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* ...other custom styles like .modal-overlay, .btn, etc... */
