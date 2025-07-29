@@ -8,6 +8,7 @@ use axum::{
     http::StatusCode,
     routing::get,
 };
+
 use k8s_openapi::api::{batch::v1::Job, core::v1::Pod};
 use kube::{
     Client, CustomResource,
@@ -16,9 +17,9 @@ use kube::{
 use qflow_types::{QFlowTaskSpec, QuantumSVMWorkflowSpec, QuantumWorkflow, QuantumWorkflowSpec};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use std::io::Write;
 use std::process::Stdio;
 use std::{collections::HashMap, sync::Arc};
-use std::io::Write;
 use tempfile::NamedTempFile;
 use tokio::io::AsyncReadExt;
 use tower_http::cors::{Any, CorsLayer};
@@ -364,7 +365,7 @@ async fn submit_qasm(
     let quantum_task = qflow_types::QFlowTask {
         name: "qasm-task".to_string(),
         depends_on: None,
-        spec: qflow_types::QFlowTaskSpec::Quantum {
+        spec: QFlowTaskSpec::Quantum {
             image: "your-quantum-image:latest".to_string(), // <-- Replace with your actual image
             circuit: qasm_data.clone(),
             params: "".to_string(), // You may want to parse/accept params separately
@@ -372,13 +373,13 @@ async fn submit_qasm(
     };
 
     // Build the workflow spec
-    let workflow_spec = qflow_types::QuantumWorkflowSpec {
+    let workflow_spec = QuantumWorkflowSpec {
         volume: None,
         tasks: vec![quantum_task],
     };
 
     // Build the QuantumWorkflow CR
-    let quantum_workflow = qflow_types::QuantumWorkflow {
+    let quantum_workflow = QuantumWorkflow {
         metadata: kube::api::ObjectMeta {
             name: Some(workflow_name.clone()),
             namespace: Some(namespace.clone()),
@@ -389,7 +390,7 @@ async fn submit_qasm(
     };
 
     // Submit to Kubernetes
-    let wf_api: Api<qflow_types::QuantumWorkflow> =
+    let wf_api: Api<QuantumWorkflow> =
         Api::namespaced(state.client.clone(), &namespace);
 
     match wf_api
@@ -418,17 +419,14 @@ struct MlSvmResult {
 }
 
 async fn run_ml_svm(
-    State(_state): State<Arc<AppState>>,
+    State(state): State<Arc<AppState>>,
     mut multipart: Multipart,
-) -> Result<Json<MlSvmResult>, StatusCode> {
+) -> Result<Json<serde_json::Value>, StatusCode> {
     // --- 1. Parse multipart form ---
     let mut csv_path = None;
     let mut target_column = None;
     let mut test_size = None;
 
-
-    // TODO: This needs to get refactored to use Kubernetes Jobs instead
-    // check out the PVC viewer
     while let Some(field) = multipart.next_field().await.unwrap() {
         let name = field.name().unwrap_or("");
         match name {
@@ -457,64 +455,68 @@ async fn run_ml_svm(
     let target_column = target_column.ok_or(StatusCode::BAD_REQUEST)?;
     let test_size = test_size.ok_or(StatusCode::BAD_REQUEST)?;
 
-    // --- 2. Prepare output paths ---
-    let metrics_path = csv_path.with_extension("metrics.txt");
-    let plot_path = csv_path.with_extension("plot.png");
+    // --- 2. Construct Kubernetes Job manifest ---
+    let job_name = format!("ml-svm-job-{}", "job-12345");
+    let namespace = "default"; // You may want to extract this from the request or config
+    let image = "qsim:latest"; // Replace with your actual image
+    let csv_file_name = "input.csv";
 
-    // --- 3. Run Python script ---
-    let python_args = [
-        "ml/svm2.py",
-        "--data_path",
-        csv_path.to_str().unwrap(),
-        "--target-column",
-        &target_column,
-        "--output-plot",
-        plot_path.to_str().unwrap(),
-        "--output-metrics",
-        metrics_path.to_str().unwrap(),
-        "--test-size",
-        &test_size,
-    ];
+    // Save the uploaded CSV to a location accessible by the Job (e.g., a PVC or object storage)
+    // For now, this is a placeholder. You may need to implement PVC upload or use a shared volume.
+    // Here, we assume the Job can access the file at /data/input.csv
 
-    let output = tokio::process::Command::new("/Users/nathaniel.ham/RustroverProjects/qflow/ml/venv/bin/python")
-        .args(&python_args)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .output()
-        .await
-        .map_err(|e| { eprintln!("Python process error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR });
-
-    let output = match output {
-        Ok(output) => output,
-        Err(status) => {
-            println!("Error while running ml_svm: {:?}", status);
-            return Err(StatusCode::INTERNAL_SERVER_ERROR)
+    // Build Job spec
+    let job_spec = serde_json::json!({
+        "apiVersion": "batch/v1",
+        "kind": "Job",
+        "metadata": {
+            "name": job_name,
+            "namespace": namespace,
+            "labels": {
+                "qflow.io/task-name": job_name
+            }
         },
-    };
+        "spec": {
+            "template": {
+                "spec": {
+                    "containers": [{
+                        "name": "ml-svm",
+                        "image": image,
+                        "args": [
+                            "--data_path", format!("/data/{}", csv_file_name),
+                            "--target-column", target_column,
+                            "--output-plot", "/data/plot.png",
+                            "--output-metrics", "/data/metrics.txt",
+                            "--test-size", test_size
+                        ],
+                        "volumeMounts": [{
+                            "name": "data-volume",
+                            "mountPath": "/data"
+                        }]
+                    }],
+                    "restartPolicy": "Never",
+                    "volumes": [{
+                        "name": "data-volume",
+                        // Define your PVC here
+                        "persistentVolumeClaim": { "claimName": "your-pvc" }
+                    }]
+                }
+            }
+        }
+    });
 
-    if !output.status.success() {
-        let err = String::from_utf8_lossy(&output.stderr);
-        eprintln!("Python error: {}", err);
-        return Err(StatusCode::INTERNAL_SERVER_ERROR);
+    // --- 3. Submit Job to Kubernetes ---
+    let job_api: Api<Job> = Api::namespaced(state.client.clone(), namespace);
+    let job: Job =
+        serde_json::from_value(job_spec).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    match job_api.create(&PostParams::default(), &job).await {
+        Ok(_) => Ok(Json(serde_json::json!({
+            "message": "SVM Job submitted",
+            "job_name": job_name
+        }))),
+        Err(e) => {
+            eprintln!("Error submitting SVM Job: {}", e);
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
     }
-
-    // --- 4. Read metrics and plot ---
-    let metrics = tokio::fs::read_to_string(&metrics_path)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
-    let mut plot_file = tokio::fs::File::open(&plot_path)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    let mut plot_bytes = Vec::new();
-    plot_file
-        .read_to_end(&mut plot_bytes)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    let plot_base64 = base64::encode(&plot_bytes);
-
-    Ok(Json(MlSvmResult {
-        metrics,
-        plot_base64,
-    }))
 }

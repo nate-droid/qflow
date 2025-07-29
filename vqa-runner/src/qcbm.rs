@@ -1,11 +1,10 @@
-use std::collections::HashMap;
-use std::cell::RefCell;
 use rand::Rng;
 use rand::distributions::{Distribution, WeightedIndex};
+use std::cell::RefCell;
+use std::collections::HashMap;
 
 use qsim::simulator::Simulator;
 use qsim::{Gate, StateVector};
-
 
 const EPSILON: f64 = 1e-12;
 
@@ -117,12 +116,18 @@ where
         let weights: Vec<_> = dist.values().cloned().collect();
         let weighted_dist = WeightedIndex::new(&weights).unwrap();
 
-        (0..num_samples).map(|_| items[weighted_dist.sample(&mut rng)].clone()).collect()
+        (0..num_samples)
+            .map(|_| items[weighted_dist.sample(&mut rng)].clone())
+            .collect()
     }
 
     /// Computes the MMD loss with a Gaussian RBF kernel.
     fn mmd_rbf_loss(target_samples: &[String], model_samples: &[String], sigma: f64) -> f64 {
-        let to_vec = |s: &String| s.chars().map(|c| c.to_digit(10).unwrap() as f64).collect::<Vec<f64>>();
+        let to_vec = |s: &String| {
+            s.chars()
+                .map(|c| c.to_digit(10).unwrap() as f64)
+                .collect::<Vec<f64>>()
+        };
         let kernel = |v1: &[f64], v2: &[f64]| {
             let sq_dist: f64 = v1.iter().zip(v2.iter()).map(|(a, b)| (a - b).powi(2)).sum();
             (-sq_dist / (2.0 * sigma.powi(2))).exp()
@@ -132,20 +137,31 @@ where
         let model_vecs: Vec<_> = model_samples.iter().map(to_vec).collect();
 
         let mut term1 = 0.0;
-        for i in 0..target_vecs.len() { for j in 0..target_vecs.len() { term1 += kernel(&target_vecs[i], &target_vecs[j]); } }
+        for i in 0..target_vecs.len() {
+            for j in 0..target_vecs.len() {
+                term1 += kernel(&target_vecs[i], &target_vecs[j]);
+            }
+        }
         term1 /= (target_vecs.len() as f64).powi(2);
 
         let mut term2 = 0.0;
-        for i in 0..model_vecs.len() { for j in 0..model_vecs.len() { term2 += kernel(&model_vecs[i], &model_vecs[j]); } }
+        for i in 0..model_vecs.len() {
+            for j in 0..model_vecs.len() {
+                term2 += kernel(&model_vecs[i], &model_vecs[j]);
+            }
+        }
         term2 /= (model_vecs.len() as f64).powi(2);
 
         let mut term3 = 0.0;
-        for i in 0..target_vecs.len() { for j in 0..model_vecs.len() { term3 += kernel(&target_vecs[i], &model_vecs[j]); } }
+        for i in 0..target_vecs.len() {
+            for j in 0..model_vecs.len() {
+                term3 += kernel(&target_vecs[i], &model_vecs[j]);
+            }
+        }
         term3 /= (target_vecs.len() * model_vecs.len()) as f64;
 
         term1 + term2 - 2.0 * term3
     }
-
 
     /// Trains the QCBM using a provided optimizer and MMD loss with an analytical gradient.
     pub fn train<O: Optimizer>(&self, params: &mut [f64], optimizer: &mut O, epochs: usize) {
@@ -154,7 +170,11 @@ where
         const NUM_MMD_SAMPLES: usize = 128;
         let mut rng = rand::thread_rng();
         let sigma = (self.num_qubits as f64).sqrt() / 2.0;
-        let to_vec = |s: &String| s.chars().map(|c| c.to_digit(10).unwrap() as f64).collect::<Vec<f64>>();
+        let to_vec = |s: &String| {
+            s.chars()
+                .map(|c| c.to_digit(10).unwrap() as f64)
+                .collect::<Vec<f64>>()
+        };
         let kernel = |v1: &[f64], v2: &[f64]| {
             let sq_dist: f64 = v1.iter().zip(v2.iter()).map(|(a, b)| (a - b).powi(2)).sum();
             (-sq_dist / (2.0 * sigma.powi(2))).exp()
@@ -189,7 +209,9 @@ where
 
                     let term_model: f64 = model_vecs.iter().map(|y| kernel(y, &vec_z)).sum();
                     let term_target: f64 = target_vecs.iter().map(|x| kernel(x, &vec_z)).sum();
-                    let d_mmd_dp_z = 2.0 * (term_model / model_vecs.len() as f64 - term_target / target_vecs.len() as f64);
+                    let d_mmd_dp_z = 2.0
+                        * (term_model / model_vecs.len() as f64
+                            - term_target / target_vecs.len() as f64);
 
                     let p_plus_z = dist_plus.get(&bitstring_z).unwrap_or(&0.0);
                     let p_minus_z = dist_minus.get(&bitstring_z).unwrap_or(&0.0);
@@ -203,8 +225,14 @@ where
             optimizer.update(params, &gradients);
 
             if (epoch + 1) % 10 == 0 || epoch == epochs - 1 {
-                let current_loss = Self::mmd_rbf_loss(&target_samples_for_epoch, &model_samples, sigma);
-                println!("Epoch {}/{} - Loss (MMD): {:.6}", epoch + 1, epochs, current_loss);
+                let current_loss =
+                    Self::mmd_rbf_loss(&target_samples_for_epoch, &model_samples, sigma);
+                println!(
+                    "Epoch {}/{} - Loss (MMD): {:.6}",
+                    epoch + 1,
+                    epochs,
+                    current_loss
+                );
             }
         }
 
@@ -213,11 +241,10 @@ where
     }
 }
 
-
 #[cfg(test)]
 mod tests {
-    use qsim::QuantumSimulator;
     use super::*;
+    use qsim::QuantumSimulator;
 
     fn simple_ry_ansatz(sim: &mut impl Simulator, params: &[f64]) {
         sim.apply_gate(&Gate::RY(0, params[0]));
@@ -232,7 +259,12 @@ mod tests {
     #[test]
     fn test_qcbm_training_with_adam_and_mmd() {
         let target_angle = (0.75_f64).sqrt().asin() * 2.0;
-        let training_data = vec!["1".to_string(), "1".to_string(), "1".to_string(), "0".to_string()];
+        let training_data = vec![
+            "1".to_string(),
+            "1".to_string(),
+            "1".to_string(),
+            "0".to_string(),
+        ];
 
         let sim = QuantumSimulator::new(1);
         let qcbm_runner = QcbmRunner::new(sim, simple_ry_ansatz, &training_data);
@@ -241,7 +273,10 @@ mod tests {
         qcbm_runner.train(&mut params, &mut optimizer, 100);
 
         let final_param = params[0];
-        assert!((final_param.cos() - target_angle.cos()).abs() < 0.2, "Learned parameter is not close to target");
+        assert!(
+            (final_param.cos() - target_angle.cos()).abs() < 0.2,
+            "Learned parameter is not close to target"
+        );
         let final_dist = qcbm_runner.get_model_distribution(&params);
         assert!((final_dist.get("0").unwrap_or(&0.0) - 0.25).abs() < 0.1);
         assert!((final_dist.get("1").unwrap_or(&0.0) - 0.75).abs() < 0.1);
@@ -249,7 +284,12 @@ mod tests {
 
     #[test]
     fn test_qcbm_learns_entangled_state_with_adam_and_mmd() {
-        let training_data = vec!["00".to_string(), "11".to_string(), "00".to_string(), "11".to_string()];
+        let training_data = vec![
+            "00".to_string(),
+            "11".to_string(),
+            "00".to_string(),
+            "11".to_string(),
+        ];
 
         let sim = QuantumSimulator::new(2);
         let qcbm_runner = QcbmRunner::new(sim, entangling_ansatz, &training_data);
@@ -257,7 +297,10 @@ mod tests {
         let mut optimizer = AdamOptimizer::new(params.len(), 0.01);
         qcbm_runner.train(&mut params, &mut optimizer, 100);
 
-        assert!(params[0].cos().abs() > 0.95, "Parameter should converge to ~0");
+        assert!(
+            params[0].cos().abs() > 0.95,
+            "Parameter should converge to ~0"
+        );
         let final_dist = qcbm_runner.get_model_distribution(&params);
         let p00 = final_dist.get("00").unwrap_or(&0.0);
         let p11 = final_dist.get("11").unwrap_or(&0.0);

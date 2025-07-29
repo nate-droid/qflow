@@ -1,6 +1,6 @@
+use qsim::Gate;
 use std::fmt;
 use std::str::FromStr;
-use qsim::Gate;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Pauli {
@@ -38,7 +38,7 @@ impl PauliTerm {
             operators: Vec::new(),
         }
     }
-    
+
     pub fn with_pauli(mut self, qubit_index: usize, pauli: Pauli) -> Self {
         if pauli != Pauli::I {
             self.operators.push((pauli, qubit_index));
@@ -46,7 +46,7 @@ impl PauliTerm {
         }
         self
     }
-    
+
     pub fn with_coefficient(mut self, coefficient: f64) -> Self {
         self.coefficient = coefficient;
         self
@@ -81,7 +81,9 @@ impl FromStr for PauliTerm {
                 return Err(PauliTermParseError);
             }
             let (pauli_char, qubit_idx_str) = op.split_at(1);
-            let qubit_index = qubit_idx_str.parse::<usize>().map_err(|_| PauliTermParseError)?;
+            let qubit_index = qubit_idx_str
+                .parse::<usize>()
+                .map_err(|_| PauliTermParseError)?;
 
             let pauli = match pauli_char {
                 "X" | "x" => Pauli::X,
@@ -110,7 +112,6 @@ impl fmt::Display for PauliTerm {
     }
 }
 
-
 // Hamiltonian represents a sum of Pauli terms, which can be used to describe quantum systems.
 #[derive(Debug, Clone, Default)]
 pub struct Hamiltonian {
@@ -121,11 +122,11 @@ impl Hamiltonian {
     pub fn new() -> Self {
         Hamiltonian { terms: Vec::new() }
     }
-    
+
     pub fn add_term(&mut self, term: PauliTerm) {
         self.terms.push(term);
     }
-    
+
     pub fn with_term(mut self, term: PauliTerm) -> Self {
         self.add_term(term);
         self

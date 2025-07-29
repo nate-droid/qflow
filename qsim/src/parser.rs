@@ -34,7 +34,13 @@ impl Display for Gate {
 impl Gate {
     pub fn target(&self) -> Vec<usize> {
         match self {
-            Gate::H(target) | Gate::X(target) | Gate::Y(target) | Gate::Z(target) | Gate::RX(target, ..) | Gate::RY(target, ..) | Gate::RZ(target, ..) => vec![*target],
+            Gate::H(target)
+            | Gate::X(target)
+            | Gate::Y(target)
+            | Gate::Z(target)
+            | Gate::RX(target, ..)
+            | Gate::RY(target, ..)
+            | Gate::RZ(target, ..) => vec![*target],
             Gate::CX(_, target) => vec![*target],
             _ => vec![],
         }
@@ -111,9 +117,7 @@ pub fn parse_qasm(qasm_str: &str) -> (usize, Vec<Gate>) {
                     gates.push(Gate::CX(c, t));
                 }
             }
-        }
-
-        else if trimmed_line.starts_with("measure") {
+        } else if trimmed_line.starts_with("measure") {
             if !has_measured {
                 gates.push(Gate::Measure);
                 has_measured = true;

@@ -1,10 +1,16 @@
-use std::collections::BTreeMap;
 use kube::CustomResource;
-use serde::{Deserialize, Serialize};
 use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 
 #[derive(CustomResource, Serialize, Deserialize, Clone, Debug, JsonSchema)]
-#[kube(group = "qflow.io", version = "v1alpha1", kind = "QuantumWorkflow", namespaced, status = "QuantumWorkflowStatus")]
+#[kube(
+    group = "qflow.io",
+    version = "v1alpha1",
+    kind = "QuantumWorkflow",
+    namespaced,
+    status = "QuantumWorkflowStatus"
+)]
 #[serde(rename_all = "camelCase")]
 pub struct QuantumWorkflowSpec {
     pub volume: Option<VolumeSpec>,
@@ -81,7 +87,6 @@ pub struct Metadata {
     status = "QuantumSVMWorkflowStatus",
     printcolumn = r#"{"name":"Phase","type":"string","jsonPath":".status.phase"}"#,
     printcolumn = r#"{"name":"Age","type":"date","json_path":".metadata.creationTimestamp"}"#
-
 )]
 pub struct QuantumSVMWorkflowSpec {
     /// Defines the dataset to be used for the experiment.
@@ -158,10 +163,18 @@ pub struct QuantumSVMWorkflowStatus {
 }
 
 // Default value functions for serde
-fn default_samples() -> u32 { 100 }
-fn default_noise() -> f64 { 0.3 }
-fn default_test_size() -> f64 { 0.3 }
-fn default_c_param() -> f64 { 1.0 }
+fn default_samples() -> u32 {
+    100
+}
+fn default_noise() -> f64 {
+    0.3
+}
+fn default_test_size() -> f64 {
+    0.3
+}
+fn default_c_param() -> f64 {
+    1.0
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
 pub struct QcbmTaskSpec {
@@ -172,7 +185,6 @@ pub struct QcbmTaskSpec {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub optimizer: Option<QcbmOptimizerSpec>,
 }
-
 
 /// Defines the optimizer configuration for a QCBM task.
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]

@@ -5,10 +5,10 @@ use std::sync::Arc;
 
 use futures_util::StreamExt;
 use kube::{
+    Resource,
     api::{Api, ListParams, Patch, PatchParams, PostParams},
     client::Client,
-    runtime::{controller::Action, Controller},
-    Resource,
+    runtime::{Controller, controller::Action},
 };
 use petgraph::{graphmap::DiGraphMap, visit::Topo};
 use thiserror::Error;
@@ -26,9 +26,9 @@ use k8s_openapi::apimachinery::pkg::api::resource::Quantity;
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta;
 
 // Serde and schema generation imports
+use qflow_types::{QFlowTask, QFlowTaskSpec, QcbmOptimizerSpec, QuantumWorkflow};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use qflow_types::{QFlowTask, QFlowTaskSpec, QcbmOptimizerSpec, QuantumWorkflow};
 // Custom types from the original qflow_types crate are now defined here for clarity
 // based on the feature request.
 
@@ -104,7 +104,6 @@ async fn create_pvc_if_not_exists(client: &Client, wf: &QuantumWorkflow) -> Resu
     Ok(())
 }
 
-
 /// Creates a Kubernetes Job for a given task spec.
 /// This function has been refactored to handle Classical, Quantum, and the new QCBM task types.
 fn create_job_for_task(
@@ -178,14 +177,15 @@ fn create_job_for_task(
             let training_data_json = serde_json::to_string(&qcbm_spec.training_data)
                 .map_err(|e| Error::Anyhow(anyhow::Error::from(e)))?;
 
-            let optimizer_spec = qcbm_spec.optimizer.clone().unwrap_or_else(|| {
-                QcbmOptimizerSpec {
+            let optimizer_spec = qcbm_spec
+                .optimizer
+                .clone()
+                .unwrap_or_else(|| QcbmOptimizerSpec {
                     name: "Adam".to_string(),
                     epochs: 100,
                     learning_rate: 0.01,
                     initial_params: None,
-                }
-            });
+                });
 
             let mut args = vec![
                 "--ansatz".to_string(),
@@ -350,23 +350,39 @@ async fn reconcile(wf: Arc<QuantumWorkflow>, ctx: Arc<Context>) -> Result<Action
         let task_name = &task.name;
         if current_statuses.get(task_name) == Some(&TASK_PENDING.to_string()) {
             let deps_succeeded = task.depends_on.as_ref().map_or(true, |deps| {
-                deps.iter()
-                    .all(|dep_name| current_statuses.get(dep_name) == Some(&TASK_SUCCEEDED.to_string()))
+                deps.iter().all(|dep_name| {
+                    current_statuses.get(dep_name) == Some(&TASK_SUCCEEDED.to_string())
+                })
             });
 
             if deps_succeeded {
                 info!("Dependencies met for task '{}', starting job.", task_name);
-                let cm_name = if let QFlowTaskSpec::Quantum { circuit, params, .. } = &task.spec {
+                let cm_name = if let QFlowTaskSpec::Quantum {
+                    circuit, params, ..
+                } = &task.spec
+                {
                     let cm_name = format!("{}-{}-cm", wf.metadata.name.clone().unwrap(), task.name);
                     // Ignore if exists logic for ConfigMap
                     match cm_api.get(&cm_name).await {
                         Ok(_) => {
                             info!("ConfigMap '{}' already exists, skipping creation.", cm_name);
-                        },
+                        }
                         Err(_) => {
                             let cm = ConfigMap {
-                                metadata: ObjectMeta { name: Some(cm_name.clone()), owner_references: Some(vec![wf.controller_owner_ref(&()).unwrap()]), ..Default::default() },
-                                data: Some([("circuit.qasm".to_string(), circuit.clone()), ("params.json".to_string(), params.clone())].into()),
+                                metadata: ObjectMeta {
+                                    name: Some(cm_name.clone()),
+                                    owner_references: Some(vec![
+                                        wf.controller_owner_ref(&()).unwrap(),
+                                    ]),
+                                    ..Default::default()
+                                },
+                                data: Some(
+                                    [
+                                        ("circuit.qasm".to_string(), circuit.clone()),
+                                        ("params.json".to_string(), params.clone()),
+                                    ]
+                                    .into(),
+                                ),
                                 ..Default::default()
                             };
                             cm_api.create(&PostParams::default(), &cm).await?;
@@ -382,7 +398,7 @@ async fn reconcile(wf: Arc<QuantumWorkflow>, ctx: Arc<Context>) -> Result<Action
                 match job_api.get(&job_name).await {
                     Ok(_) => {
                         info!("Job '{}' already exists, skipping creation.", job_name);
-                    },
+                    }
                     Err(_) => {
                         let job = create_job_for_task(&wf, task, cm_name)?;
                         job_api.create(&PostParams::default(), &job).await?;
@@ -396,7 +412,11 @@ async fn reconcile(wf: Arc<QuantumWorkflow>, ctx: Arc<Context>) -> Result<Action
             for (task_name, current_status) in &current_statuses {
                 println!("Task '{}' depends on '{}'", task_name, current_status);
             }
-            println!("task: '{}', status: '{:?}'", task_name, current_statuses.get(task_name));
+            println!(
+                "task: '{}', status: '{:?}'",
+                task_name,
+                current_statuses.get(task_name)
+            );
         }
     }
 

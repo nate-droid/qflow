@@ -1,9 +1,9 @@
 use super::parser::{Gate, parse_qasm};
 use super::state::StateVector;
-use num_complex::Complex;
-use std::f64::consts::FRAC_1_SQRT_2;
 use crate::circuit::Circuit;
 use crate::events::{Event, GateInfo, MeasurementInfo, SimulationStartInfo};
+use num_complex::Complex;
+use std::f64::consts::FRAC_1_SQRT_2;
 
 pub trait Simulator {
     /// Resets the simulator to the |0...0⟩ state.
@@ -47,7 +47,8 @@ impl Simulator for QuantumSimulator {
 
                 if let Some(matrix) = matrix {
                     if gate.target().len() == 1 {
-                        self.state.apply_single_qubit_gate(&matrix, gate.target()[0]);
+                        self.state
+                            .apply_single_qubit_gate(&matrix, gate.target()[0]);
                     } else {
                         self.state.apply_multi_qubit_gate(&matrix, &gate.target());
                     }
@@ -133,9 +134,6 @@ impl QuantumSimulator {
         let amp = self.state.amplitudes[state_index];
         (amp.re * amp.re + amp.im * amp.im).sqrt()
     }
-
-
-
 }
 
 // custom type for gate matrices
@@ -151,7 +149,6 @@ pub const HADAMARD: GateMatrix = [
         Complex::new(-FRAC_1_SQRT_2, 0.0),
     ],
 ];
-
 
 pub const PAULI_X: GateMatrix = [
     [Complex::new(0.0, 0.0), Complex::new(1.0, 0.0)],
@@ -170,47 +167,40 @@ pub const PAULI_Z: GateMatrix = [
 
 pub fn construct_gate_matrix(gate: &Gate) -> Option<GateMatrix> {
     match gate {
-        Gate::RX(qubit, theta) => {
-            Some([
-                [
-                    Complex::new((theta / 2.0).cos(), 0.0),
-                    Complex::new(0.0, -(theta / 2.0).sin()),
-                ],
-                [
-                    Complex::new(0.0, -(theta / 2.0).sin()),
-                    Complex::new((theta / 2.0).cos(), 0.0),
-                ],
-            ])
-        }
-        Gate::RY(qubit, theta) => {
-            Some([
-                [
-                    Complex::new((theta / 2.0).cos(), 0.0),
-                    Complex::new(0.0, -(theta / 2.0).sin()),
-                ],
-                [
-                    Complex::new(0.0, (theta / 2.0).sin()),
-                    Complex::new((theta / 2.0).cos(), 0.0),
-                ],
-            ])
-
-        }
-        Gate::RZ(qubit, theta) => {
-            Some([
-                [
-                    Complex::new((theta / 2.0).cos(), -(theta / 2.0).sin()),
-                    Complex::new(0.0, 0.0),
-                ],
-                [
-                    Complex::new(0.0, 0.0),
-                    Complex::new((theta / 2.0).cos(), (theta / 2.0).sin()),
-                ],
-            ])
-        }
+        Gate::RX(qubit, theta) => Some([
+            [
+                Complex::new((theta / 2.0).cos(), 0.0),
+                Complex::new(0.0, -(theta / 2.0).sin()),
+            ],
+            [
+                Complex::new(0.0, -(theta / 2.0).sin()),
+                Complex::new((theta / 2.0).cos(), 0.0),
+            ],
+        ]),
+        Gate::RY(qubit, theta) => Some([
+            [
+                Complex::new((theta / 2.0).cos(), 0.0),
+                Complex::new(0.0, -(theta / 2.0).sin()),
+            ],
+            [
+                Complex::new(0.0, (theta / 2.0).sin()),
+                Complex::new((theta / 2.0).cos(), 0.0),
+            ],
+        ]),
+        Gate::RZ(qubit, theta) => Some([
+            [
+                Complex::new((theta / 2.0).cos(), -(theta / 2.0).sin()),
+                Complex::new(0.0, 0.0),
+            ],
+            [
+                Complex::new(0.0, 0.0),
+                Complex::new((theta / 2.0).cos(), (theta / 2.0).sin()),
+            ],
+        ]),
         _ => {
             eprintln!("Unsupported gate type: {:?}", gate);
             panic!("Unsupported gate type encountered during simulation.");
-        }, // Unsupported gate type
+        } // Unsupported gate type
     }
 }
 

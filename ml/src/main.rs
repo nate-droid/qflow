@@ -1,9 +1,9 @@
 mod integrations;
 
-use std::str::FromStr;
 use num_complex::Complex;
-use qsim::{Gate, QuantumSimulator};
 use qsim::simulator::Simulator;
+use qsim::{Gate, QuantumSimulator};
+use std::str::FromStr;
 
 /// Parses a circuit string into a vector of Gate objects.
 /// This function is the bridge between the string representation and the simulator.
@@ -28,8 +28,12 @@ fn parse_circuit(circuit_str: &str) -> Result<Vec<qsim::Gate>, String> {
 
         // Split the line into the operation part and the qubit part
         let mut parts = clean_line.splitn(2, ' ');
-        let op_str = parts.next().ok_or_else(|| format!("Missing operation in line: '{}'", clean_line))?;
-        let qubit_args_str = parts.next().ok_or_else(|| format!("Missing qubit arguments in line: '{}'", clean_line))?;
+        let op_str = parts
+            .next()
+            .ok_or_else(|| format!("Missing operation in line: '{}'", clean_line))?;
+        let qubit_args_str = parts
+            .next()
+            .ok_or_else(|| format!("Missing qubit arguments in line: '{}'", clean_line))?;
 
         // --- Parse Qubit Arguments ---
         let qubit_indices: Vec<usize> = qubit_args_str
@@ -62,27 +66,43 @@ fn parse_circuit(circuit_str: &str) -> Result<Vec<qsim::Gate>, String> {
         match name.as_str() {
             "cx" => {
                 if qubit_indices.len() != 2 {
-                    return Err(format!("CX gate requires 2 qubits, found {}: '{}'", qubit_indices.len(), clean_line));
+                    return Err(format!(
+                        "CX gate requires 2 qubits, found {}: '{}'",
+                        qubit_indices.len(),
+                        clean_line
+                    ));
                 }
                 gates.push(Gate::CX(0, 1));
             }
             "rz" => {
                 if qubit_indices.len() != 1 {
-                    return Err(format!("Rz gate requires 1 qubit, found {}: '{}'", qubit_indices.len(), clean_line));
+                    return Err(format!(
+                        "Rz gate requires 1 qubit, found {}: '{}'",
+                        qubit_indices.len(),
+                        clean_line
+                    ));
                 }
                 if let Some(param) = parameter {
                     gates.push(Gate::RZ(qubit_indices[0], param));
                 } else {
-                    return Err(format!("Rz gate requires a parameter, found none in '{}'", clean_line));
+                    return Err(format!(
+                        "Rz gate requires a parameter, found none in '{}'",
+                        clean_line
+                    ));
                 }
             }
             "h" => {
                 if qubit_indices.len() != 1 {
-                    return Err(format!("Hadamard gate requires 1 qubit, found {}: '{}'", qubit_indices.len(), clean_line));
+                    return Err(format!(
+                        "Hadamard gate requires 1 qubit, found {}: '{}'",
+                        qubit_indices.len(),
+                        clean_line
+                    ));
                 }
-                gates.push(Gate::H(qubit_indices[0]));;
+                gates.push(Gate::H(qubit_indices[0]));
             }
-            _ => { // For single-qubit gates like h, rz, etc.
+            _ => {
+                // For single-qubit gates like h, rz, etc.
                 panic!("Invalid gate specified: '{}'", name);
             }
         }
@@ -107,9 +127,15 @@ fn parse_circuit(circuit_str: &str) -> Result<Vec<qsim::Gate>, String> {
 pub fn compute_kernel_value(point_a: &[f64], point_b: &[f64]) -> f64 {
     // For this example, we assume the number of qubits is determined by the data dimension.
     // A more robust implementation would handle mismatched dimensions.
-    assert_eq!(point_a.len(), point_b.len(), "Data points must have the same dimension.");
+    assert_eq!(
+        point_a.len(),
+        point_b.len(),
+        "Data points must have the same dimension."
+    );
     let num_qubits = point_a.len();
-    if num_qubits == 0 { return 1.0; } // Handle empty data points
+    if num_qubits == 0 {
+        return 1.0;
+    } // Handle empty data points
     let mut simulator = QuantumSimulator::new(num_qubits);
 
     // --- Step 1: Simulate the circuit for point_a ---
@@ -205,7 +231,9 @@ fn create_encoding_circuit(data_point: &[f64]) -> String {
     // --- Qubit and Classical Register Declaration ---
     qasm_string.push_str("// Declare a 2-qubit register for the feature map\n");
     qasm_string.push_str("qreg q[2];\n");
-    qasm_string.push_str("// Declare a 2-bit classical register for measurement (optional, for simulation)\n");
+    qasm_string.push_str(
+        "// Declare a 2-bit classical register for measurement (optional, for simulation)\n",
+    );
     qasm_string.push_str("creg c[2];\n\n");
 
     // --- Circuit Implementation ---
@@ -257,7 +285,7 @@ fn main() {
     // Kernel computation example
     let data_point_1 = vec![0.5, 0.2];
     let data_point_2 = vec![0.55, 0.25]; // A point very close to the first one
-    let data_point_3 = vec![-0.8, 0.9];  // A point far away
+    let data_point_3 = vec![-0.8, 0.9]; // A point far away
 
     println!("--- Quantum Kernel Similarity ---");
     println!("Point 1: {:?}", data_point_1);

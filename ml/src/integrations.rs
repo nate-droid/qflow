@@ -1,6 +1,6 @@
-use numpy::{PyReadonlyArray1};
+use ndarray::ArrayView1;
+use numpy::PyReadonlyArray1;
 use pyo3::prelude::*;
-use ndarray::{ArrayView1};
 
 // This is a placeholder for your actual quantum kernel computation.
 // Replace this with your actual implementation.
@@ -14,10 +14,7 @@ fn compute_kernel_value(v1: ArrayView1<f64>, v2: ArrayView1<f64>) -> f64 {
 }
 
 #[pyfunction]
-fn quantum_kernel(
-    x1: PyReadonlyArray1<f64>,
-    x2: PyReadonlyArray1<f64>,
-) -> PyResult<f64> {
+fn quantum_kernel(x1: PyReadonlyArray1<f64>, x2: PyReadonlyArray1<f64>) -> PyResult<f64> {
     let x1 = x1.as_array();
     let x2 = x2.as_array();
     Ok(compute_kernel_value(x1, x2))

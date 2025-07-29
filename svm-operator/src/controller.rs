@@ -1,23 +1,23 @@
 // src/controller.rs
 
-use kube::{
-    Client, Api, Resource, ResourceExt,
-    runtime::controller::Action,
-    api::{Patch, PatchParams, PostParams},
-};
 use k8s_openapi::api::batch::v1::{Job, JobSpec, JobStatus};
 use k8s_openapi::api::core::v1::{
-    PersistentVolumeClaim, PersistentVolumeClaimSpec, PersistentVolumeClaimStatus,
-    PodTemplateSpec, PodSpec, Container, VolumeMount, Volume, PersistentVolumeClaimVolumeSource,
-    VolumeResourceRequirements
+    Container, PersistentVolumeClaim, PersistentVolumeClaimSpec, PersistentVolumeClaimStatus,
+    PersistentVolumeClaimVolumeSource, PodSpec, PodTemplateSpec, Volume, VolumeMount,
+    VolumeResourceRequirements,
 };
 use k8s_openapi::apimachinery::pkg::api::resource::Quantity;
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta;
+use kube::{
+    Api, Client, Resource, ResourceExt,
+    api::{Patch, PatchParams, PostParams},
+    runtime::controller::Action,
+};
 use serde_json::json;
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use tokio::time::Duration;
 use thiserror::Error;
+use tokio::time::Duration;
 
 use qflow_types::{QuantumSVMWorkflow, QuantumSVMWorkflowStatus};
 
@@ -44,7 +44,9 @@ impl Context {
 /// The main reconciliation function. This is called every time a change
 /// is detected on a QuantumSVMWorkflow resource.
 pub async fn reconcile(qsvm: Arc<QuantumSVMWorkflow>, ctx: Arc<Context>) -> Result<Action, Error> {
-    let ns = qsvm.namespace().ok_or(Error::MissingObjectKey(".metadata.namespace"))?;
+    let ns = qsvm
+        .namespace()
+        .ok_or(Error::MissingObjectKey(".metadata.namespace"))?;
     let name = qsvm.name_any();
     let client = ctx.client.clone();
 
@@ -52,7 +54,11 @@ pub async fn reconcile(qsvm: Arc<QuantumSVMWorkflow>, ctx: Arc<Context>) -> Resu
     let job_api: Api<Job> = Api::namespaced(client.clone(), &ns);
     let pvc_api: Api<PersistentVolumeClaim> = Api::namespaced(client.clone(), &ns);
 
-    let phase = qsvm.status.as_ref().and_then(|s| s.phase.clone()).unwrap_or_else(|| "Pending".to_string());
+    let phase = qsvm
+        .status
+        .as_ref()
+        .and_then(|s| s.phase.clone())
+        .unwrap_or_else(|| "Pending".to_string());
 
     match phase.as_str() {
         "Pending" => {
@@ -61,7 +67,13 @@ pub async fn reconcile(qsvm: Arc<QuantumSVMWorkflow>, ctx: Arc<Context>) -> Resu
             let pvc = build_pvc(&name, &pvc_name);
             pvc_api.create(&PostParams::default(), &pvc).await?;
 
-            update_status(&qsvm_api, &name, "CreatingVolume", "PersistentVolumeClaim created").await?;
+            update_status(
+                &qsvm_api,
+                &name,
+                "CreatingVolume",
+                "PersistentVolumeClaim created",
+            )
+            .await?;
             Ok(Action::requeue(Duration::from_secs(5)))
         }
         "CreatingVolume" => {
@@ -73,7 +85,13 @@ pub async fn reconcile(qsvm: Arc<QuantumSVMWorkflow>, ctx: Arc<Context>) -> Resu
                         println!("PVC {} is Bound, creating data generation job...", pvc_name);
                         let job = build_data_gen_job(&qsvm, &pvc_name)?;
                         job_api.create(&PostParams::default(), &job).await?;
-                        update_status(&qsvm_api, &name, "GeneratingData", "Data generation job started").await?;
+                        update_status(
+                            &qsvm_api,
+                            &name,
+                            "GeneratingData",
+                            "Data generation job started",
+                        )
+                        .await?;
                         return Ok(Action::requeue(Duration::from_secs(10)));
                     }
                 }
@@ -88,15 +106,25 @@ pub async fn reconcile(qsvm: Arc<QuantumSVMWorkflow>, ctx: Arc<Context>) -> Resu
                 if status.succeeded.unwrap_or(0) > 0 {
                     println!("Data generation job {} succeeded.", job_name);
                     // TODO: Create the second Kubernetes Job to run the main SVM experiment.
-                    update_status(&qsvm_api, &name, "TrainingModel", "Data generation complete, starting training.").await?;
+                    update_status(
+                        &qsvm_api,
+                        &name,
+                        "TrainingModel",
+                        "Data generation complete, starting training.",
+                    )
+                    .await?;
                     return Ok(Action::requeue(Duration::from_secs(10)));
                 } else if status.failed.unwrap_or(0) > 0 {
                     println!("Data generation job {} failed.", job_name);
-                    update_status(&qsvm_api, &name, "Failed", "Data generation job failed.").await?;
+                    update_status(&qsvm_api, &name, "Failed", "Data generation job failed.")
+                        .await?;
                     return Ok(Action::await_change());
                 }
             }
-            println!("Waiting for data generation job {} to complete...", job_name);
+            println!(
+                "Waiting for data generation job {} to complete...",
+                job_name
+            );
             Ok(Action::requeue(Duration::from_secs(10)))
         }
         "TrainingModel" => {
@@ -108,7 +136,7 @@ pub async fn reconcile(qsvm: Arc<QuantumSVMWorkflow>, ctx: Arc<Context>) -> Resu
             // Workflow is in a terminal state, do nothing.
             Ok(Action::await_change())
         }
-        _ => Ok(Action::requeue(Duration::from_secs(10)))
+        _ => Ok(Action::requeue(Duration::from_secs(10))),
     }
 }
 
@@ -198,7 +226,12 @@ fn build_data_gen_job(qsvm: &QuantumSVMWorkflow, pvc_name: &str) -> Result<Job, 
 }
 
 /// Helper function to update the status of the QuantumSVMWorkflow resource
-async fn update_status(api: &Api<QuantumSVMWorkflow>, name: &str, phase: &str, message: &str) -> Result<(), Error> {
+async fn update_status(
+    api: &Api<QuantumSVMWorkflow>,
+    name: &str,
+    phase: &str,
+    message: &str,
+) -> Result<(), Error> {
     let new_status = Patch::Apply(json!({
         "apiVersion": "upcloud.com/v1alpha1",
         "kind": "QuantumSVMWorkflow",
@@ -211,7 +244,6 @@ async fn update_status(api: &Api<QuantumSVMWorkflow>, name: &str, phase: &str, m
     api.patch_status(name, &ps, &new_status).await?;
     Ok(())
 }
-
 
 /// The error policy for the controller. This is called when the `reconcile`
 /// function returns an error.

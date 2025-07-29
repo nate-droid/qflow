@@ -1,9 +1,9 @@
 mod qcbm;
 
 use hamiltonian::{Hamiltonian, PauliTerm};
-use std::cell::RefCell;
-use qsim::{Gate, QuantumSimulator as StatevectorSimulator};
 use qsim::simulator::Simulator;
+use qsim::{Gate, QuantumSimulator as StatevectorSimulator};
+use std::cell::RefCell;
 
 /// A VQE problem runner that is configured with a specific Hamiltonian and ansatz circuit.
 /// It is generic over any type `S` that implements the `Simulator` trait.
@@ -152,10 +152,28 @@ fn get_h2_hamiltonian_at_distance(distance: f64) -> Hamiltonian {
 
     Hamiltonian::new()
         .with_term(PauliTerm::new().with_coefficient(c_i)) // Identity term
-        .with_term(PauliTerm::new().with_coefficient(c_z0).with_pauli(0, hamiltonian::Pauli::Z))
-        .with_term(PauliTerm::new().with_coefficient(c_z1).with_pauli(1, hamiltonian::Pauli::Z))
-        .with_term(PauliTerm::new().with_coefficient(c_z0z1).with_pauli(0, hamiltonian::Pauli::Z).with_pauli(1, hamiltonian::Pauli::Z))
-        .with_term(PauliTerm::new().with_coefficient(c_x0x1).with_pauli(0, hamiltonian::Pauli::X).with_pauli(1, hamiltonian::Pauli::X))
+        .with_term(
+            PauliTerm::new()
+                .with_coefficient(c_z0)
+                .with_pauli(0, hamiltonian::Pauli::Z),
+        )
+        .with_term(
+            PauliTerm::new()
+                .with_coefficient(c_z1)
+                .with_pauli(1, hamiltonian::Pauli::Z),
+        )
+        .with_term(
+            PauliTerm::new()
+                .with_coefficient(c_z0z1)
+                .with_pauli(0, hamiltonian::Pauli::Z)
+                .with_pauli(1, hamiltonian::Pauli::Z),
+        )
+        .with_term(
+            PauliTerm::new()
+                .with_coefficient(c_x0x1)
+                .with_pauli(0, hamiltonian::Pauli::X)
+                .with_pauli(1, hamiltonian::Pauli::X),
+        )
 }
 
 fn main() {
@@ -202,8 +220,11 @@ mod tests {
 
     #[test]
     fn test_vqe_for_single_qubit_z() {
-        let hamiltonian = Hamiltonian::new()
-            .with_term(PauliTerm::new().with_coefficient(1.0).with_pauli(0, hamiltonian::Pauli::Z));
+        let hamiltonian = Hamiltonian::new().with_term(
+            PauliTerm::new()
+                .with_coefficient(1.0)
+                .with_pauli(0, hamiltonian::Pauli::Z),
+        );
 
         let simulator = StatevectorSimulator::new(1);
         let vqe_runner = VqeRunner::new(simulator, hamiltonian, single_qubit_ansatz);
@@ -212,8 +233,7 @@ mod tests {
         let steps = 100;
         let learning_rate = 0.4;
 
-        let (final_energy, _final_params) =
-            vqe_runner.run(initial_params, steps, learning_rate);
+        let (final_energy, _final_params) = vqe_runner.run(initial_params, steps, learning_rate);
 
         let expected_energy = -1.0;
         assert!(

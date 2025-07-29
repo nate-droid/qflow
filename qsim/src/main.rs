@@ -54,11 +54,11 @@ fn main() -> io::Result<()> {
         io::stdin().read_to_string(&mut qasm_input)?;
     }
     println!("attempting to run: \n {:?}", qasm_input);
-    
+
     if let Some(events) = run_simulation(&qasm_input) {
         let json_output = serde_json::to_string_pretty(&events)
             .expect("Failed to serialize simulation result to JSON.");
-        
+
         if let Some(output_path) = cli.output_file {
             let file = File::create(output_path)?;
             let mut writer = BufWriter::new(file);

@@ -1,9 +1,9 @@
-use std::ops::Deref;
+use crate::simulator::QuantumGate;
 use num_complex::Complex;
 use rand::Rng;
 use rand::distributions::{Distribution, WeightedIndex};
 use serde::Serialize;
-use crate::simulator::{QuantumGate};
+use std::ops::Deref;
 
 #[derive(Serialize, Clone)]
 pub struct StateVector {
