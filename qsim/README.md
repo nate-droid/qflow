@@ -32,3 +32,21 @@ fn main() {
     println!("Measurement results: {:?}", results);
 }
 ```
+
+# Printing the Circuit
+
+```rust
+    #[test]
+    fn test_circuit_display() {
+        let mut circuit = Circuit::new();
+        circuit.num_qubits = 2;
+        circuit.add_moment(vec![Gate::H(0)]);
+        circuit.add_moment(vec![Gate::CX(0, 1)]);
+        circuit.add_moment(vec![Gate::X(1)]);
+
+        println!("{}", circuit);
+        // results in:
+        // q0: [H]─●────
+        // q1: ────⊕─[X]
+    }
+```

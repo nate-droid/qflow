@@ -1,31 +1,34 @@
 use std::fmt::Display;
+use serde::Deserialize;
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Deserialize)]
+#[serde(tag = "type")]
 pub enum Gate {
-    I(usize),
-    H(usize),
-    X(usize),
-    Y(usize),
-    Z(usize),
-    CX(usize, usize),
-    RX(usize, f64), // target and theta
-    RY(usize, f64), // target and theta
-    RZ(usize, f64), // target and theta
+    I{qubit: usize},
+    H{qubit: usize},
+    X{qubit: usize},
+    Y{qubit: usize},
+    Z{qubit: usize},
+    CX {control: usize, target: usize},
+    CNOT {control: usize, target: usize}, // Alias for CX
+    RX{qubit: usize, theta: f64}, // target and theta
+    RY{qubit: usize, theta: f64}, // target and theta
+    RZ{qubit: usize, theta: f64}, // target and theta
     Measure,
 }
 
 impl Display for Gate {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Gate::I(q) => write!(f, "I q[{}]", q),
-            Gate::H(q) => write!(f, "H q[{}]", q),
-            Gate::X(q) => write!(f, "X q[{}]", q),
-            Gate::Y(q) => write!(f, "Y q[{}]", q),
-            Gate::Z(q) => write!(f, "Z q[{}]", q),
-            Gate::CX(c, t) => write!(f, "CX q[{}],q[{}]", c, t),
-            Gate::RX(q, theta) => write!(f, "RX q[{}],{}", q, theta),
-            Gate::RY(q, theta) => write!(f, "RY q[{}],{}", q, theta),
-            Gate::RZ(q, theta) => write!(f, "RZ q[{}],{}", q, theta),
+            Gate::I{qubit } => write!(f, "I q[{}]", qubit),
+            Gate::H{qubit} => write!(f, "H q[{}]", qubit),
+            Gate::X{qubit } => write!(f, "X q[{}]", qubit),
+            Gate::Y{qubit } => write!(f, "Y q[{}]", qubit),
+            Gate::Z{qubit } => write!(f, "Z q[{}]", qubit),
+            Gate::CX{control, target} | Gate::CNOT{control, target}=> write!(f, "CX q[{}],q[{}]", control, target),
+            Gate::RX{qubit, theta} => write!(f, "RX q[{}],{}", qubit, theta),
+            Gate::RY{qubit, theta} => write!(f, "RY q[{}],{}", qubit, theta),
+            Gate::RZ{qubit, theta} => write!(f, "RZ q[{}],{}", qubit, theta),
             Gate::Measure => write!(f, "Measure"),
         }
     }
@@ -34,14 +37,15 @@ impl Display for Gate {
 impl Gate {
     pub fn target(&self) -> Vec<usize> {
         match self {
-            Gate::H(target)
-            | Gate::X(target)
-            | Gate::Y(target)
-            | Gate::Z(target)
-            | Gate::RX(target, ..)
-            | Gate::RY(target, ..)
-            | Gate::RZ(target, ..) => vec![*target],
-            Gate::CX(_, target) => vec![*target],
+            | Gate::X{qubit }
+            | Gate::Y{qubit }
+            | Gate::Z{qubit }
+            | Gate::H{qubit}
+            | Gate::RX{qubit, ..}
+            | Gate::RY{qubit, ..}
+            | Gate::RZ{qubit, ..} => vec![*qubit],
+            Gate::CX {target, ..} | Gate::CNOT {target, ..} => vec![*target],
+
             _ => vec![],
         }
     }
@@ -78,7 +82,7 @@ pub fn parse_qasm(qasm_str: &str) -> (usize, Vec<Gate>) {
             if let Some(start) = trimmed_line.find('[') {
                 if let Some(end) = trimmed_line.find(']') {
                     if let Ok(q) = trimmed_line[start + 1..end].parse::<usize>() {
-                        gates.push(Gate::H(q));
+                        gates.push(Gate::H{qubit: q});
                     }
                 }
             }
@@ -86,7 +90,7 @@ pub fn parse_qasm(qasm_str: &str) -> (usize, Vec<Gate>) {
             if let Some(start) = trimmed_line.find('[') {
                 if let Some(end) = trimmed_line.find(']') {
                     if let Ok(q) = trimmed_line[start + 1..end].parse::<usize>() {
-                        gates.push(Gate::X(q));
+                        gates.push(Gate::X{qubit: q});
                     }
                 }
             }
@@ -94,7 +98,7 @@ pub fn parse_qasm(qasm_str: &str) -> (usize, Vec<Gate>) {
             if let Some(start) = trimmed_line.find('[') {
                 if let Some(end) = trimmed_line.find(']') {
                     if let Ok(q) = trimmed_line[start + 1..end].parse::<usize>() {
-                        gates.push(Gate::Y(q));
+                        gates.push(Gate::Y{qubit: q});
                     }
                 }
             }
@@ -102,7 +106,7 @@ pub fn parse_qasm(qasm_str: &str) -> (usize, Vec<Gate>) {
             if let Some(start) = trimmed_line.find('[') {
                 if let Some(end) = trimmed_line.find(']') {
                     if let Ok(q) = trimmed_line[start + 1..end].parse::<usize>() {
-                        gates.push(Gate::Z(q));
+                        gates.push(Gate::Z{qubit: q});
                     }
                 }
             }
@@ -114,7 +118,7 @@ pub fn parse_qasm(qasm_str: &str) -> (usize, Vec<Gate>) {
                 .collect();
             if parts.len() == 5 && parts[0] == "cx" && parts[1] == "q" && parts[3] == "q" {
                 if let (Ok(c), Ok(t)) = (parts[2].parse::<usize>(), parts[4].parse::<usize>()) {
-                    gates.push(Gate::CX(c, t));
+                    gates.push(Gate::CX{control: c, target: t});
                 }
             }
         } else if trimmed_line.starts_with("measure") {
@@ -144,8 +148,8 @@ mod tests {
 
         assert_eq!(num_qubits, 2);
         assert_eq!(gates.len(), 3);
-        assert_eq!(gates[0], Gate::H(0));
-        assert_eq!(gates[1], Gate::CX(0, 1));
+        assert_eq!(gates[0], Gate::H{qubit: 0});
+        assert_eq!(gates[1], Gate::CX{control: 0, target: 1});
         assert_eq!(gates[2], Gate::Measure);
     }
 }

@@ -34,11 +34,11 @@ impl Simulator for QuantumSimulator {
     }
     fn apply_gate(&mut self, gate: &Gate) {
         match gate {
-            Gate::H(target) => self.state.apply_single_qubit_gate(&HADAMARD, *target),
-            Gate::X(target) => self.state.apply_single_qubit_gate(&PAULI_X, *target),
-            Gate::Y(target) => self.state.apply_single_qubit_gate(&PAULI_Y, *target),
-            Gate::Z(target) => self.state.apply_single_qubit_gate(&PAULI_Z, *target),
-            Gate::CX(control, target) => self.state.apply_cx(*control, *target),
+            Gate::H{qubit} => self.state.apply_single_qubit_gate(&HADAMARD, *qubit),
+            Gate::X{qubit} => self.state.apply_single_qubit_gate(&PAULI_X, *qubit),
+            Gate::Y{qubit} => self.state.apply_single_qubit_gate(&PAULI_Y, *qubit),
+            Gate::Z{qubit} => self.state.apply_single_qubit_gate(&PAULI_Z, *qubit),
+            Gate::CX {control, target} | Gate::CNOT {control, target} => self.state.apply_cx(*control, *target),
             Gate::Measure => {
                 let result = self.state.measure_all(&mut rand::thread_rng());
             }
@@ -69,9 +69,9 @@ impl Simulator for QuantumSimulator {
         // Apply the Pauli string operator to the state
         for op in &operators {
             match op {
-                Gate::X(target) => self.state.apply_single_qubit_gate(&PAULI_X, *target),
-                Gate::Y(target) => self.state.apply_single_qubit_gate(&PAULI_Y, *target),
-                Gate::Z(target) => self.state.apply_single_qubit_gate(&PAULI_Z, *target),
+                Gate::X{qubit} => self.state.apply_single_qubit_gate(&PAULI_X, *qubit),
+                Gate::Y{qubit} => self.state.apply_single_qubit_gate(&PAULI_Y, *qubit),
+                Gate::Z{qubit} => self.state.apply_single_qubit_gate(&PAULI_Z, *qubit),
                 _ => panic!("Unsupported operator in Pauli string expectation"),
             }
         }
@@ -110,18 +110,19 @@ impl QuantumSimulator {
     }
 
     pub fn apply_circuit(&mut self, circuit: &Circuit) {
-        for gate in &circuit.gates {
-            self.apply_gate(gate);
+        for moment in &circuit.moments {
+            for gate in moment {
+                self.apply_gate(gate);
+            }
         }
     }
 
     // sets the simulator state to a specific configuration ie: [0, 0, 1, 0, 0] == "00100"
     pub fn prepare_initial_state(&mut self, initial_state: &[u8]) {
-        self.reset();
         for (i, &state) in initial_state.iter().enumerate() {
             if state == 1 {
                 // Apply an X gate to flip |0> to |1>
-                self.apply_gate(&Gate::X(i));
+                self.apply_gate(&Gate::X { qubit: i });
             }
         }
     }
@@ -167,7 +168,7 @@ pub const PAULI_Z: GateMatrix = [
 
 pub fn construct_gate_matrix(gate: &Gate) -> Option<GateMatrix> {
     match gate {
-        Gate::RX(qubit, theta) => Some([
+        Gate::RX{qubit, theta} => Some([
             [
                 Complex::new((theta / 2.0).cos(), 0.0),
                 Complex::new(0.0, -(theta / 2.0).sin()),
@@ -177,7 +178,7 @@ pub fn construct_gate_matrix(gate: &Gate) -> Option<GateMatrix> {
                 Complex::new((theta / 2.0).cos(), 0.0),
             ],
         ]),
-        Gate::RY(qubit, theta) => Some([
+        Gate::RY{qubit, theta} => Some([
             [
                 Complex::new((theta / 2.0).cos(), 0.0),
                 Complex::new(0.0, -(theta / 2.0).sin()),
@@ -187,7 +188,7 @@ pub fn construct_gate_matrix(gate: &Gate) -> Option<GateMatrix> {
                 Complex::new((theta / 2.0).cos(), 0.0),
             ],
         ]),
-        Gate::RZ(qubit, theta) => Some([
+        Gate::RZ{qubit, theta} => Some([
             [
                 Complex::new((theta / 2.0).cos(), -(theta / 2.0).sin()),
                 Complex::new(0.0, 0.0),
@@ -224,11 +225,11 @@ pub fn run_simulation(qasm_input: &str) -> Option<Vec<Event>> {
     for (i, gate) in gates.iter().enumerate() {
         let gate_str = format!("{:?}", gate);
         match gate {
-            Gate::H(target) => state.apply_single_qubit_gate(&HADAMARD, *target),
-            Gate::X(target) => state.apply_single_qubit_gate(&PAULI_X, *target),
-            Gate::Y(target) => state.apply_single_qubit_gate(&PAULI_Y, *target),
-            Gate::Z(target) => state.apply_single_qubit_gate(&PAULI_Z, *target),
-            Gate::CX(control, target) => state.apply_cx(*control, *target),
+            Gate::H{qubit} => state.apply_single_qubit_gate(&HADAMARD, *qubit),
+            Gate::X{qubit} => state.apply_single_qubit_gate(&PAULI_X, *qubit),
+            Gate::Y{qubit} => state.apply_single_qubit_gate(&PAULI_Y, *qubit),
+            Gate::Z{qubit} => state.apply_single_qubit_gate(&PAULI_Z, *qubit),
+            Gate::CX{control, target} | Gate::CNOT {control, target} => state.apply_cx(*control, *target),
             Gate::Measure => {
                 let result = state.measure_all(&mut rng);
 

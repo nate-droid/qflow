@@ -47,10 +47,10 @@ where
                 .operators
                 .iter()
                 .map(|(pauli, qubit)| match pauli {
-                    hamiltonian::Pauli::I => Gate::I(*qubit),
-                    hamiltonian::Pauli::X => Gate::X(*qubit),
-                    hamiltonian::Pauli::Y => Gate::Y(*qubit),
-                    hamiltonian::Pauli::Z => Gate::Z(*qubit),
+                    hamiltonian::Pauli::I => Gate::I{qubit: *qubit},
+                    hamiltonian::Pauli::X => Gate::X{qubit: *qubit},
+                    hamiltonian::Pauli::Y => Gate::Y{qubit: *qubit},
+                    hamiltonian::Pauli::Z => Gate::Z{qubit: *qubit},
                 })
                 .collect();
 
@@ -128,11 +128,11 @@ where
 
 /// A hardware-efficient ansatz for two qubits.
 fn two_qubit_ansatz<S: Simulator>(simulator: &mut S, params: &[f64]) {
-    simulator.apply_gate(&Gate::RY(0, params[0]));
-    simulator.apply_gate(&Gate::RY(1, params[1]));
-    simulator.apply_gate(&Gate::CX(0, 1));
-    simulator.apply_gate(&Gate::RY(0, params[2]));
-    simulator.apply_gate(&Gate::RY(1, params[3]));
+    simulator.apply_gate(&Gate::RY{qubit: 0, theta: params[0]});
+    simulator.apply_gate(&Gate::RY{qubit: 1, theta: params[1]});
+    simulator.apply_gate(&Gate::CX{control: 0, target: 1});
+    simulator.apply_gate(&Gate::RY{qubit: 0, theta: params[2]});
+    simulator.apply_gate(&Gate::RY{qubit: 1, theta: params[3]});
 }
 
 /// Returns the H2 molecule Hamiltonian for a given internuclear distance (in Angstroms).
@@ -215,7 +215,7 @@ mod tests {
 
     /// A simple ansatz for a single qubit problem.
     fn single_qubit_ansatz<S: Simulator>(simulator: &mut S, params: &[f64]) {
-        simulator.apply_gate(&Gate::RY(0, params[0]));
+        simulator.apply_gate(&Gate::RY{qubit: 0, theta: params[0]});
     }
 
     #[test]
