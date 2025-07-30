@@ -2,8 +2,6 @@ use chumsky::extra;
 use chumsky::prelude::*;
 use chumsky::span::SimpleSpan;
 use std::collections::HashMap;
-// The direct import of qsim::Gate is removed from the parser.
-// The interpreter will handle the conversion to qsim types later.
 
 // ================================================================================================
 // |                                  Abstract Syntax Tree (AST)                                  |
@@ -17,8 +15,6 @@ pub enum Value {
     List(Vec<(Value, SimpleSpan)>),
 }
 
-/// A simple, symbolic representation of a gate, perfect for the AST.
-/// It stores the gate's name and its arguments exactly as they appear in the code.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Gate {
     pub name: String,
@@ -27,28 +23,36 @@ pub struct Gate {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Declaration {
-    DefParam { name: String, value: f64 },
+    DefParam {
+        name: String,
+        value: f64,
+    },
     DefCircuit {
         name: String,
         qubits: u64,
-        // The body now uses our local, symbolic Gate struct.
         body: Vec<Gate>,
     },
-    DefObs { name: String, operator: String },
+    DefObs {
+        name: String,
+        operator: String,
+    },
+    /// NEW: A declaration for a user-defined macro.
+    DefMacro {
+        name: String,
+        params: Vec<String>,
+        body: Vec<Gate>,
+    },
     Run(HashMap<String, Value>),
-    // Other Declaration types from the spec would go here.
+    Loop {
+        times: u64,
+        body: Vec<Declaration>,
+    },
 }
 
 // ================================================================================================
 // |                                       Chumsky Parser                                         |
 // ================================================================================================
 
-/// This parser is now only responsible for parsing the S-expression syntax.
-/// It produces a raw, untyped Abstract Syntax Tree made of `Value` enums.
-///
-/// NOTE: This parser now assumes the input string has been pre-processed.
-/// Comments (prefixed with ';') should be removed, and all whitespace
-/// should be normalized to single spaces before calling this parser.
 pub fn qcl_parser<'a>() -> impl Parser<'a, &'a str, Vec<(Value, SimpleSpan)>, extra::Err<Simple<'a, char>>> {
     let sexpr_with_span = recursive(|sexpr_with_span| {
         let num = text::int(10)
@@ -67,11 +71,8 @@ pub fn qcl_parser<'a>() -> impl Parser<'a, &'a str, Vec<(Value, SimpleSpan)>, ex
 
         let ident = text::ident().map(|s: &str| Value::Str(s.to_string()));
 
-        // An atom is one of the basic, non-list types.
         let atom = num.or(str_lit).or(symbol).or(ident);
 
-        // A list is a recursive collection of S-expressions, delimited by parentheses.
-        // We use the built-in `padded()` to handle whitespace between items.
         let list = sexpr_with_span
             .padded()
             .repeated()
@@ -79,13 +80,9 @@ pub fn qcl_parser<'a>() -> impl Parser<'a, &'a str, Vec<(Value, SimpleSpan)>, ex
             .delimited_by(just('('), just(')'))
             .map(Value::List);
 
-        // An S-expression is either an atom or a list.
-        // We map with span to track the location of each element for better errors.
-        atom.or(list)
-            .map_with(|v, e| (v, e.span()))
+        atom.or(list).map_with(|v, e| (v, e.span()))
     });
 
-    // The top-level parser is just a sequence of S-expressions, with optional padding.
     sexpr_with_span
         .padded()
         .repeated()
@@ -97,8 +94,6 @@ pub fn qcl_parser<'a>() -> impl Parser<'a, &'a str, Vec<(Value, SimpleSpan)>, ex
 // |                                      Semantic Validation                                     |
 // ================================================================================================
 
-/// This function takes the raw output from the parser and validates its meaning,
-/// converting it into the final, strongly-typed `Declaration` AST.
 pub fn validate_ast(raw_s_exprs: &[(Value, SimpleSpan)]) -> Result<Vec<Declaration>, String> {
     raw_s_exprs
         .iter()
@@ -106,7 +101,6 @@ pub fn validate_ast(raw_s_exprs: &[(Value, SimpleSpan)]) -> Result<Vec<Declarati
         .collect()
 }
 
-/// A new helper function dedicated to parsing a single gate.
 fn try_gate_from_value(gate_val: &(Value, SimpleSpan)) -> Result<Gate, String> {
     if let Value::List(gate_items) = &gate_val.0 {
         if gate_items.is_empty() {
@@ -114,7 +108,8 @@ fn try_gate_from_value(gate_val: &(Value, SimpleSpan)) -> Result<Gate, String> {
         }
         let gate_name = match &gate_items[0].0 {
             Value::Str(s) => s.clone(),
-            _ => return Err("Expected gate name as a string".to_string()),
+            Value::Symbol(s) => s.clone(), // Gate names can also be symbols now (for macros)
+            _ => return Err("Expected gate name as a string or symbol".to_string()),
         };
         let args = gate_items[1..].iter().map(|(arg, _)| arg.clone()).collect();
         Ok(Gate { name: gate_name, args })
@@ -123,7 +118,6 @@ fn try_gate_from_value(gate_val: &(Value, SimpleSpan)) -> Result<Gate, String> {
     }
 }
 
-// This function produces a simple String error on failure.
 fn try_decl_from_value(val: Value, _span: SimpleSpan) -> Result<Declaration, String> {
     let list = match val {
         Value::List(list) => list,
@@ -171,7 +165,6 @@ fn try_decl_from_value(val: Value, _span: SimpleSpan) -> Result<Declaration, Str
                 _ => return Err(format!("Expected a number for qubit count at span {:?}", qubits_list[1].1)),
             };
 
-            // The circuit body parsing is now much cleaner, calling the new helper function.
             let body = list[3..]
                 .iter()
                 .map(try_gate_from_value)
@@ -179,8 +172,74 @@ fn try_decl_from_value(val: Value, _span: SimpleSpan) -> Result<Declaration, Str
 
             Ok(Declaration::DefCircuit { name, qubits, body })
         }
+        // NEW: Handle parsing a macro definition.
+        "def" => {
+            if list.len() < 3 { return Err("'def' requires a name, parameter list, and body".to_string()); }
+            let name = match &list[1].0 { Value::Symbol(s) => s.clone(), _ => return Err("Expected a symbol for macro name".to_string()) };
+
+            let params_list = match &list[2].0 {
+                Value::List(l) => l,
+                _ => return Err("Expected a list of symbols for macro parameters".to_string()),
+            };
+            let params = params_list.iter().map(|(p, _)| match p {
+                Value::Symbol(s) => Ok(s.clone()),
+                _ => Err("Macro parameters must be symbols".to_string()),
+            }).collect::<Result<Vec<_>,_>>()?;
+
+            let body = list[3..]
+                .iter()
+                .map(try_gate_from_value)
+                .collect::<Result<_, _>>()?;
+
+            Ok(Declaration::DefMacro { name, params, body })
+        }
         "run" => {
-            Ok(Declaration::Run(HashMap::new()))
+            let mut run_args = HashMap::new();
+            for arg_pair in &list[1..] {
+                if let (Value::List(pair), _) = arg_pair {
+                    if pair.len() != 2 { return Err("Run argument should be a (key: value) pair".to_string()); }
+
+                    let key = match &pair[0].0 {
+                        Value::Str(s) => s.trim_end_matches(':').to_string(),
+                        _ => return Err("Expected a keyword key (e.g., 'circuit:') for run argument".to_string()),
+                    };
+
+                    let value = pair[1].0.clone();
+                    run_args.insert(key, value);
+                } else {
+                    return Err("Expected a list for a run command argument".to_string());
+                }
+            }
+            Ok(Declaration::Run(run_args))
+        }
+        "loop" => {
+            if list.len() < 2 { return Err("'loop' requires arguments and a body".to_string()); }
+
+            let (times_list, _) = match &list[1] {
+                (Value::List(l), span) => (l, span),
+                _ => return Err("Expected a list for loop arguments, e.g., (times 10)".to_string()),
+            };
+            if times_list.len() != 2 {
+                if let Value::Str(s) = &times_list[0].0 {
+                    if s != "times" {
+                        return Err("Expected loop argument to be (times <number>)".to_string());
+                    }
+                } else {
+                    return Err("Expected loop argument to be (times <number>)".to_string());
+                }
+            }
+            let times = match &times_list[1].0 {
+                Value::Num(n) => *n as u64,
+                _ => return Err("Expected a number for loop times".to_string()),
+            };
+
+            let body_s_exprs: Vec<(Value, SimpleSpan)> = list[2..].to_vec();
+            let body_decls = validate_ast(&body_s_exprs)?;
+
+            Ok(Declaration::Loop {
+                times,
+                body: body_decls,
+            })
         }
         _ => Err(format!("Unknown command '{}'", command)),
     }
