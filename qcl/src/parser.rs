@@ -25,7 +25,8 @@ pub struct Gate {
 pub enum Declaration {
     DefParam {
         name: String,
-        value: f64,
+        // The value is no longer a raw f64, but a `Value` that can be evaluated later.
+        value: Value,
     },
     DefCircuit {
         name: String,
@@ -36,7 +37,6 @@ pub enum Declaration {
         name: String,
         operator: String,
     },
-    /// NEW: A declaration for a user-defined macro.
     DefMacro {
         name: String,
         params: Vec<String>,
@@ -108,7 +108,7 @@ fn try_gate_from_value(gate_val: &(Value, SimpleSpan)) -> Result<Gate, String> {
         }
         let gate_name = match &gate_items[0].0 {
             Value::Str(s) => s.clone(),
-            Value::Symbol(s) => s.clone(), // Gate names can also be symbols now (for macros)
+            Value::Symbol(s) => s.clone(),
             _ => return Err("Expected gate name as a string or symbol".to_string()),
         };
         let args = gate_items[1..].iter().map(|(arg, _)| arg.clone()).collect();
@@ -138,7 +138,8 @@ fn try_decl_from_value(val: Value, _span: SimpleSpan) -> Result<Declaration, Str
         "defparam" => {
             if list.len() != 3 { return Err("'defparam' expects 2 arguments".to_string()); }
             let name = match &list[1].0 { Value::Symbol(s) => s.clone(), _ => return Err("Expected a symbol for parameter name".to_string()) };
-            let value = match &list[2].0 { Value::Num(n) => *n, _ => return Err("Expected a number for parameter value".to_string()) };
+            // The value is now just the third element, whatever it is.
+            let value = list[2].0.clone();
             Ok(Declaration::DefParam { name, value })
         }
         "defobs" => {
@@ -172,7 +173,6 @@ fn try_decl_from_value(val: Value, _span: SimpleSpan) -> Result<Declaration, Str
 
             Ok(Declaration::DefCircuit { name, qubits, body })
         }
-        // NEW: Handle parsing a macro definition.
         "def" => {
             if list.len() < 3 { return Err("'def' requires a name, parameter list, and body".to_string()); }
             let name = match &list[1].0 { Value::Symbol(s) => s.clone(), _ => return Err("Expected a symbol for macro name".to_string()) };

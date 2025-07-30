@@ -54,8 +54,10 @@ impl Workflow {
         for decl in declarations {
             match decl {
                 Declaration::DefParam { name, value } => {
-                    println!("[Workflow] Defining parameter: '{}' = {}", name, value);
-                    self.params.insert(name.clone(), *value);
+                    // NEW: Evaluate the value as an expression before storing it.
+                    let evaluated_value = self.evaluate_expr(value)?;
+                    println!("[Workflow] Defining parameter: '{}' = {}", name, evaluated_value);
+                    self.params.insert(name.clone(), evaluated_value);
                 }
                 Declaration::DefCircuit { name, qubits, body } => {
                     println!("[Workflow] Defining circuit: '{}'", name);
@@ -93,6 +95,46 @@ impl Workflow {
             }
         }
         Ok(())
+    }
+
+    /// NEW: Recursively evaluates a `Value` as a classical expression.
+    fn evaluate_expr(&self, value: &Value) -> Result<f64, String> {
+        match value {
+            Value::Num(n) => Ok(*n),
+            Value::Symbol(s) => self.params.get(s)
+                .cloned()
+                .ok_or_else(|| format!("Parameter '{}' not found in current scope.", s)),
+            Value::List(list) => {
+                if list.is_empty() {
+                    return Err("Cannot evaluate empty list as an expression.".to_string());
+                }
+                let op = match &list[0].0 {
+                    Value::Str(s) => s.as_str(),
+                    _ => return Err("Expected operator (+, -, *, /) as first element of expression list.".to_string()),
+                };
+
+                // Evaluate all arguments recursively.
+                let args: Vec<f64> = list[1..].iter()
+                    .map(|(val, _)| self.evaluate_expr(val))
+                    .collect::<Result<_,_>>()?;
+
+                match op {
+                    "+" => Ok(args.iter().sum()),
+                    "-" => {
+                        if args.is_empty() { return Err("'-' operator requires at least one argument.".to_string()); }
+                        Ok(args[0] - args[1..].iter().sum::<f64>())
+                    },
+                    "*" => Ok(args.iter().product()),
+                    "/" => {
+                        if args.len() != 2 { return Err("'/' operator requires exactly two arguments.".to_string()); }
+                        if args[1] == 0.0 { return Err("Division by zero.".to_string()); }
+                        Ok(args[0] / args[1])
+                    }
+                    _ => Err(format!("Unknown operator '{}'", op)),
+                }
+            }
+            _ => Err("Invalid value type for expression evaluation.".to_string()),
+        }
     }
 
     fn run_simulation(&mut self, args: &HashMap<String, Value>) -> Result<(), String> {
@@ -158,20 +200,17 @@ impl Workflow {
         Ok(vec![concrete_gate])
     }
 
-    /// Expands a macro into a list of concrete gates.
     fn expand_macro(&self, macro_def: &MacroDef, args: &[Value], run_params: &HashMap<String, f64>) -> Result<Vec<ConcreteGate>, String> {
         if macro_def.params.len() != args.len() {
             return Err(format!("Macro '{}' expects {} arguments, but got {}", macro_def.name, macro_def.params.len(), args.len()));
         }
 
-        // FIX: Create a substitution map from parameter name (&str) to the provided value (&Value).
         let substitutions: HashMap<&str, &Value> = macro_def.params.iter().map(|s| s.as_str()).zip(args.iter()).collect();
 
         let mut expanded_gates = Vec::new();
         for template_gate in &macro_def.body {
             let substituted_args = template_gate.args.iter().map(|arg| {
                 if let Value::Symbol(s) = arg {
-                    // FIX: Look up using a &str and dereference the result twice to get the Value.
                     if let Some(subst_val) = substitutions.get(s.as_str()) {
                         return (**subst_val).clone();
                     }
@@ -202,8 +241,12 @@ impl Workflow {
             match &symbolic_gate.args.get(arg_idx) {
                 Some(Value::Num(n)) => Ok(*n),
                 Some(Value::Symbol(s)) => {
-                    run_params.get(s).cloned()
-                        .or_else(|| self.params.get(s).cloned())
+                    // First, check run-local parameters.
+                    if let Some(val) = run_params.get(s) {
+                        return Ok(*val);
+                    }
+                    // Then, check global workflow parameters.
+                    self.params.get(s).cloned()
                         .ok_or_else(|| format!("Undefined parameter '{}' for gate '{}'", s, symbolic_gate.name))
                 }
                 _ => Err(format!("Invalid argument for angle in gate '{}'", symbolic_gate.name)),
@@ -234,7 +277,7 @@ mod tests {
         let declarations = vec![
             Declaration::DefParam {
                 name: "theta".to_string(),
-                value: 1.57,
+                value: Value::Num(1.57),
             },
             Declaration::DefCircuit {
                 name: "my_circ".to_string(),
@@ -298,7 +341,7 @@ mod tests {
         let declarations = vec![
             Declaration::DefParam {
                 name: "my_angle".to_string(),
-                value: 0.5,
+                value: Value::Num(0.5),
             },
             Declaration::DefCircuit {
                 name: "simple_ry".to_string(),
@@ -371,7 +414,6 @@ mod tests {
         assert_eq!(workflow.run_counter, 12);
     }
 
-    /// NEW TEST: Verify that a simple macro can be defined and expanded.
     #[test]
     fn test_simple_macro_expansion() {
         let declarations = vec![
@@ -401,5 +443,34 @@ mod tests {
         assert_eq!(concrete_circuit.len(), 2);
         assert_eq!(concrete_circuit[0], ConcreteGate::H { qubit: 0 });
         assert_eq!(concrete_circuit[1], ConcreteGate::CX { control: 0, target: 1 });
+    }
+
+    /// NEW TEST: Verify that a parameter can be defined with a classical expression.
+    #[test]
+    fn test_expression_evaluation_in_defparam() {
+        let declarations = vec![
+            Declaration::DefParam {
+                name: "initial_angle".to_string(),
+                value: Value::Num(1.5),
+            },
+            Declaration::DefParam {
+                name: "offset".to_string(),
+                value: Value::Num(0.5),
+            },
+            // Define a new parameter by adding the two previous ones.
+            Declaration::DefParam {
+                name: "final_angle".to_string(),
+                value: Value::List(vec![
+                    (Value::Str("+".to_string()), SimpleSpan::from(0..0)),
+                    (Value::Symbol("initial_angle".to_string()), SimpleSpan::from(0..0)),
+                    (Value::Symbol("offset".to_string()), SimpleSpan::from(0..0)),
+                ]),
+            },
+        ];
+
+        let mut workflow = Workflow::new();
+        workflow.run(declarations).unwrap();
+
+        assert_eq!(workflow.params.get("final_angle"), Some(&2.0));
     }
 }
