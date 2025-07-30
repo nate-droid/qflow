@@ -1,7 +1,7 @@
 use wasm_bindgen::prelude::*;
 use serde::{Deserialize, Serialize};
 use num_complex::Complex;
-use qsim::circuit::Circuit;
+use qsim::circuit::{circuit_to_qasm, Circuit};
 use qsim::{Gate, QuantumSimulator};
 use qsim::simulator::Simulator;
 
@@ -168,4 +168,24 @@ pub fn run_simulation(circuit_json: &str) -> String {
         error(&format!("Error serializing result: {}", e));
         serde_json::json!({ "error": format!("Failed to serialize result: {}", e) }).to_string()
     })
+}
+
+
+#[wasm_bindgen]
+pub fn compile_circuit_to_qasm(circuit_json: &str) -> String {
+    // Deserialize the input string into our Rust `Circuit` struct.
+    let circuit: Circuit = match serde_json::from_str(circuit_json) {
+        Ok(c) => c,
+        Err(e) => {
+            error(&format!("Error deserializing circuit: {}", e));
+            // Return a JSON object indicating the error.
+            return serde_json::json!({ "error": format!("Failed to parse circuit: {}", e) }).to_string();
+        }
+    };
+
+    // Convert the circuit to QASM format.
+    let qasm = circuit_to_qasm(&circuit);
+
+    // Return the QASM string.
+    qasm
 }
