@@ -8,13 +8,16 @@ import React, {
 import { Routes, Route, NavLink, Outlet, useNavigate } from "react-router-dom";
 import cytoscape from "cytoscape";
 import cytoscapeDagre from "cytoscape-dagre";
-import VisualizerPage from "./pages/VisualizerPage";
+
 // NOTE: The 'cytoscape-dagre' library is expected to be loaded globally in this environment.
 // The direct import is removed to resolve a build error where the module cannot be found.
 // The registration of the dagre layout is assumed to be handled by the global script.
 // Make sure to run: npm install cytoscape dagre d3
 
 cytoscape.use(cytoscapeDagre);
+
+import VisualizerPage from "./pages/VisualizerPage";
+import CircuitSimulatorPage from "./pages/CircuitSimulatorPage";
 
 //================================================================================
 // --- HELPER & REUSABLE COMPONENTS ---
@@ -1088,142 +1091,6 @@ function MlSvmPage() {
             />
           </div>
         )}
-      </div>
-    </div>
-  );
-}
-
-function CircuitSimulatorPage() {
-  const [numQubits, setNumQubits] = useState(3);
-  const [moments, setMoments] = useState([]);
-  const [selectedGate, setSelectedGate] = useState(null);
-  const [wasm, setWasm] = useState(null);
-  const [simResult, setSimResult] = useState(null);
-  const [isSimulating, setIsSimulating] = useState(false);
-
-  useEffect(() => {
-    const loadWasm = async () => {
-      try {
-        const mockWasm = {
-          run_simulation: (circuitJson) => {
-            const circuit = JSON.parse(circuitJson);
-            if (
-              circuit.numQubits === 2 &&
-              circuit.moments.length === 2 &&
-              circuit.moments[0]?.[0]?.type === "H" &&
-              circuit.moments[0]?.[0]?.qubit === 0 &&
-              circuit.moments[1]?.[0]?.type === "CNOT"
-            ) {
-              return JSON.stringify({
-                stateVector: [
-                  [0.7071, 0],
-                  [0, 0],
-                  [0, 0],
-                  [0.7071, 0],
-                ],
-                probabilities: [0.5, 0, 0, 0.5],
-              });
-            }
-            const numStates = 1 << circuit.numQubits;
-            const probabilities = new Array(numStates).fill(0);
-            if (numStates > 0) probabilities[0] = 1.0;
-            const stateVector = new Array(numStates).fill([0, 0]);
-            if (numStates > 0) stateVector[0] = [1, 0];
-            return JSON.stringify({ stateVector, probabilities });
-          },
-        };
-        setTimeout(() => setWasm(mockWasm), 500);
-      } catch (err) {
-        console.error("Error loading WASM module:", err);
-      }
-    };
-    loadWasm();
-  }, []);
-
-  const clearCircuit = useCallback(() => {
-    setMoments([]);
-    setSelectedGate(null);
-    setSimResult(null);
-  }, []);
-  const handleQubitChange = (newNumQubits) => {
-    if (newNumQubits < numQubits) {
-      const newMoments = moments
-        .map((moment) =>
-          moment.filter((gate) =>
-            gate.type === "CNOT"
-              ? gate.control < newNumQubits && gate.target < newNumQubits
-              : gate.qubit < newNumQubits,
-          ),
-        )
-        .filter((moment) => moment && moment.length > 0);
-      setMoments(newMoments);
-    }
-    setNumQubits(newQubits);
-    setSimResult(null);
-  };
-  const handleRunSimulation = () => {
-    if (!wasm || isSimulating) return;
-    setIsSimulating(true);
-    setSimResult(null);
-    const circuitPayload = {
-      numQubits: numQubits,
-      moments: moments.filter((m) => m && m.length > 0),
-    };
-    setTimeout(() => {
-      try {
-        const resultJson = wasm.run_simulation(JSON.stringify(circuitPayload));
-        setSimResult(JSON.parse(resultJson));
-      } catch (e) {
-        setSimResult({ error: e.message });
-      } finally {
-        setIsSimulating(false);
-      }
-    }, 100);
-  };
-
-  return (
-    <div className="bg-gray-900 text-white flex flex-col items-center justify-center p-4 font-sans h-full">
-      <div className="w-full max-w-7xl mx-auto">
-        <header className="text-center mb-6">
-          <h1 className="text-4xl font-bold text-cyan-300">
-            Quantum Circuit Simulator
-          </h1>
-          <p className="text-gray-400 mt-2">
-            Design a circuit, then press "Run Simulation" to see the final state
-            probabilities.
-          </p>
-        </header>
-        <main className="flex flex-col md:flex-row gap-6">
-          <aside className="w-full md:w-64 flex-shrink-0">
-            <GatePalette
-              selectedGate={selectedGate}
-              setSelectedGate={setSelectedGate}
-              addQubit={() => handleQubitChange(numQubits + 1)}
-              removeQubit={() => handleQubitChange(numQubits - 1)}
-              numQubits={numQubits}
-              clearCircuit={clearCircuit}
-              onRun={handleRunSimulation}
-              isSimulating={isSimulating}
-              wasmLoaded={!!wasm}
-            />
-          </aside>
-          <div className="flex-grow flex flex-col">
-            <div className="bg-gray-800 p-6 rounded-lg shadow-lg">
-              <CircuitGrid
-                numQubits={numQubits}
-                moments={moments}
-                setMoments={setMoments}
-                selectedGate={selectedGate}
-                setSelectedGate={setSelectedGate}
-              />
-            </div>
-            <SimulationOutput
-              result={simResult}
-              numQubits={numQubits}
-              isSimulating={isSimulating}
-            />
-          </div>
-        </main>
       </div>
     </div>
   );
