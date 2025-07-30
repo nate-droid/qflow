@@ -69,14 +69,15 @@ impl Workflow {
     }
 
     /// This function orchestrates the simulation based on the `(run ...)` arguments.
-    /// For now, it's a placeholder to show the flow.
     fn run_simulation(&self, args: &HashMap<String, Value>) -> Result<(), String> {
-        // In a real implementation, you would parse the arguments to find the
-        // circuit to run, the observable to measure, and the optimizer to use.
-        // For this example, let's assume we're running the 'vqe_ansatz' circuit.
+        // Find the circuit name from the run arguments.
+        let circuit_name = match args.get("circuit") {
+            Some(Value::Symbol(s)) => s,
+            _ => return Err("Run command must specify a circuit, e.g., (run (circuit: 'my_circ'))".to_string()),
+        };
 
-        let circuit_def = self.circuits.get("vqe_ansatz")
-            .ok_or_else(|| "Circuit 'vqe_ansatz' not found for run command".to_string())?;
+        let circuit_def = self.circuits.get(circuit_name)
+            .ok_or_else(|| format!("Circuit '{}' not found for run command", circuit_name))?;
 
         println!("[Workflow] Building concrete circuit for '{}'", circuit_def.name);
 
@@ -207,5 +208,35 @@ mod tests {
         let result = workflow.build_concrete_circuit(&circuit_def);
         assert!(result.is_err());
         assert!(result.err().unwrap().contains("Undefined parameter 'undefined_angle'"));
+    }
+
+    /// A new test for a simple workflow with one parameter and one RY gate.
+    #[test]
+    fn test_single_parameter_and_ry_gate() {
+        let declarations = vec![
+            Declaration::DefParam {
+                name: "my_angle".to_string(),
+                value: 0.5,
+            },
+            Declaration::DefCircuit {
+                name: "simple_ry".to_string(),
+                qubits: 1,
+                body: vec![SymbolicGate {
+                    name: "RY".to_string(),
+                    args: vec![Value::Symbol("my_angle".to_string()), Value::Num(0.0)],
+                }],
+            },
+        ];
+
+        let mut workflow = Workflow::new();
+        // Execute the declarations to populate the workflow state.
+        workflow.execute(declarations).unwrap();
+
+        // Now, manually build the circuit to check the result.
+        let circuit_def = workflow.circuits.get("simple_ry").unwrap();
+        let concrete_circuit = workflow.build_concrete_circuit(circuit_def).unwrap();
+
+        assert_eq!(concrete_circuit.len(), 1);
+        assert_eq!(concrete_circuit[0], ConcreteGate::RY { qubit: 0, theta: 0.5 });
     }
 }
