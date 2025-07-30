@@ -117,9 +117,15 @@ pub fn circuit_to_qasm(circuit: &Circuit) -> String {
                 Gate::X { qubit } => qasm.push_str(&format!("X q[{}];\n", qubit)),
                 Gate::Y { qubit } => qasm.push_str(&format!("Y q[{}];\n", qubit)),
                 Gate::Z { qubit } => qasm.push_str(&format!("Z q[{}];\n", qubit)),
-                Gate::RX { qubit, theta } => qasm.push_str(&format!("RX q[{}], {};", qubit, theta)),
-                Gate::RY { qubit, theta } => qasm.push_str(&format!("RY q[{}], {};", qubit, theta)),
-                Gate::RZ { qubit, theta } => qasm.push_str(&format!("RZ q[{}], {};", qubit, theta)),
+                Gate::RX { qubit, theta } => {
+                    qasm.push_str(&format!("RX q[{}], {};\n", qubit, theta))
+                }
+                Gate::RY { qubit, theta } => {
+                    qasm.push_str(&format!("RY q[{}], {};\n", qubit, theta))
+                }
+                Gate::RZ { qubit, theta } => {
+                    qasm.push_str(&format!("RZ q[{}], {};\n", qubit, theta))
+                }
                 Gate::CX { control, target } | Gate::CNOT { control, target } => {
                     qasm.push_str(&format!("CX q[{}],q[{}];\n", control, target));
                 }

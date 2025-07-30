@@ -173,6 +173,29 @@ const CircuitGrid = ({
     momentIndex: null,
   });
 
+  // Popover state for editing theta
+  const [thetaEdit, setThetaEdit] = useState(null); // {momentIndex, qubitIndex, theta, left, top}
+  const popoverRef = React.useRef();
+
+  // Close popover on outside click or Escape
+  useEffect(() => {
+    if (!thetaEdit) return;
+    function handle(e) {
+      if (popoverRef.current && !popoverRef.current.contains(e.target)) {
+        setThetaEdit(null);
+      }
+    }
+    function handleEsc(e) {
+      if (e.key === "Escape") setThetaEdit(null);
+    }
+    document.addEventListener("mousedown", handle);
+    document.addEventListener("keydown", handleEsc);
+    return () => {
+      document.removeEventListener("mousedown", handle);
+      document.removeEventListener("keydown", handleEsc);
+    };
+  }, [thetaEdit]);
+
   const handleCellClick = (qubitIndex, momentIndex) => {
     // --- CNOT Gate Logic ---
     if (selectedGate === "CNOT") {
@@ -297,42 +320,10 @@ const CircuitGrid = ({
             singleQubitGate.type === "RZ"
           ) {
             gateComponent = (
-              <div
-                className="flex flex-col items-center"
-                style={{ minHeight: "64px" }}
-              >
-                <GateIcon
-                  gate={singleQubitGate.type}
-                  theta={singleQubitGate.theta}
-                />
-                <input
-                  type="number"
-                  step="any"
-                  min="0"
-                  max={Math.PI * 2}
-                  value={singleQubitGate.theta}
-                  onClick={(e) => e.stopPropagation()}
-                  onChange={(e) => {
-                    const newTheta = Number(e.target.value);
-                    if (isNaN(newTheta)) return;
-                    const newMoments = [...moments];
-                    const moment = newMoments[m];
-                    const gateIdx = moment.findIndex(
-                      (g) => g.qubit === q && g.type === singleQubitGate.type,
-                    );
-                    if (gateIdx !== -1) {
-                      moment[gateIdx] = {
-                        ...moment[gateIdx],
-                        theta: newTheta,
-                      };
-                      setMoments(newMoments);
-                    }
-                  }}
-                  className="w-16 px-1 py-0.5 mt-2 rounded bg-gray-700 border border-gray-500 text-white text-xs"
-                  style={{ fontSize: "0.8em" }}
-                  title="Edit θ"
-                />
-              </div>
+              <GateIcon
+                gate={singleQubitGate.type}
+                theta={singleQubitGate.theta}
+              />
             );
           } else {
             gateComponent = <GateIcon gate={singleQubitGate.type} />;
@@ -367,7 +358,31 @@ const CircuitGrid = ({
                 ? "rgba(59,130,246,0.18)"
                 : undefined,
             }}
-            onClick={() => handleCellClick(q, m)}
+            onClick={(e) => {
+              // If RX/RY/RZ, open popover for theta editing
+              if (
+                singleQubitGate &&
+                ["RX", "RY", "RZ"].includes(singleQubitGate.type)
+              ) {
+                const rect = e.currentTarget.getBoundingClientRect();
+                setThetaEdit({
+                  momentIndex: m,
+                  qubitIndex: q,
+                  theta: singleQubitGate.theta,
+                  left: rect.left + window.scrollX,
+                  top: rect.top + window.scrollY,
+                });
+                e.stopPropagation();
+              } else {
+                handleCellClick(q, m);
+              }
+            }}
+            title={
+              singleQubitGate &&
+              ["RX", "RY", "RZ"].includes(singleQubitGate.type)
+                ? "Click to edit θ"
+                : undefined
+            }
           >
             {gateComponent}
           </div>,
@@ -432,6 +447,80 @@ const CircuitGrid = ({
           ))}
           {gridCells}
         </div>
+        {thetaEdit && (
+          <div
+            ref={popoverRef}
+            style={{
+              position: "absolute",
+              left: thetaEdit.left - 24,
+              top: thetaEdit.top + 48,
+              zIndex: 50,
+              background: "#1f2937",
+              border: "1px solid #4b5563",
+              borderRadius: "0.5rem",
+              padding: "1rem",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.25)",
+              minWidth: "160px",
+            }}
+          >
+            <div className="mb-2 text-white text-sm font-semibold">
+              Edit θ for{" "}
+              {["RX", "RY", "RZ"].includes(
+                moments[thetaEdit.momentIndex]?.find(
+                  (g) => g.qubit === thetaEdit.qubitIndex,
+                )?.type,
+              )
+                ? moments[thetaEdit.momentIndex].find(
+                    (g) => g.qubit === thetaEdit.qubitIndex,
+                  ).type
+                : ""}
+            </div>
+            <input
+              type="number"
+              step="any"
+              min="0"
+              max={Math.PI * 2}
+              value={thetaEdit.theta}
+              onChange={(e) => {
+                const val = Number(e.target.value);
+                if (!isNaN(val)) setThetaEdit({ ...thetaEdit, theta: val });
+              }}
+              className="w-full px-2 py-1 rounded bg-gray-700 border border-gray-500 text-white mb-2"
+              autoFocus
+            />
+            <div className="flex justify-end space-x-2">
+              <button
+                className="px-3 py-1 rounded bg-green-600 hover:bg-green-700 text-white text-xs"
+                onClick={() => {
+                  // Save theta to the correct gate
+                  const newMoments = [...moments];
+                  const moment = newMoments[thetaEdit.momentIndex];
+                  const gateIdx = moment.findIndex(
+                    (g) =>
+                      g.qubit === thetaEdit.qubitIndex &&
+                      ["RX", "RY", "RZ"].includes(g.type),
+                  );
+                  if (gateIdx !== -1) {
+                    moment[gateIdx] = {
+                      ...moment[gateIdx],
+                      theta: thetaEdit.theta,
+                    };
+                    setMoments(newMoments);
+                  }
+                  setThetaEdit(null);
+                }}
+              >
+                Save
+              </button>
+              <button
+                className="px-3 py-1 rounded bg-gray-600 hover:bg-gray-700 text-white text-xs"
+                onClick={() => setThetaEdit(null)}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
         {Array.from({ length: numQubits }).map((_, qIndex) => (
           <div
             key={`label-${qIndex}`}
