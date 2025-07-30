@@ -46,6 +46,14 @@ As I often have limited free time, this kinda let me tackle a few things at once
 I've always loved taking complex problems and making them simpler for users. When applied correctly, abstractions can make
 it easier for users to reason about what the actual problems they are looking to solve are.
 
+# UI (Work in Progress)
+
+I've recently started work in the wasm-ui directory to re-design the frontend using more modern web technologies like
+react and an initial WASM implementation of the simulator. This allows the UI to run the simulation directly in the browser.
+
+![simulator running in WASM](img.png)
+
+
 # Example Results
 
 The following image shows the results of running against the "make_circles" dataset from scikit-learn. You can find out 
