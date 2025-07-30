@@ -74,6 +74,15 @@ impl fmt::Display for Circuit {
     }
 }
 
+// this is a naive implementation, and does nothing to optimize the circuit (yet)
+pub fn gates_to_circuit(gates: Vec<Gate>) -> Circuit {
+    let mut circuit = Circuit::new();
+    for gate in gates {
+        circuit.add_gate(gate);
+    }
+    circuit
+}
+
 // tests
 #[cfg(test)]
 mod tests {
