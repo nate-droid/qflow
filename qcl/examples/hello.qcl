@@ -1,0 +1,119 @@
+;=================================================================
+;= Example 1: Basic Sanity Check
+;=
+;= Purpose: Tests the most basic declarations. Does the parser
+;= correctly identify parameters and a simple, non-parameterized
+;= circuit?
+;=================================================================
+
+(defparam 'learning_rate 0.1)
+
+(defcircuit 'bell_state (qubits: 2)
+    (H 0)
+    (CX 0 1)
+)
+
+(defobs 'simple_obs "Z0")
+
+(run (circuit: 'bell_state' obs: 'simple_obs'))
+
+
+;=================================================================
+;= Example 2: VQE-style Parameterized Circuit
+;=
+;= Purpose: This is a more realistic test. It checks if the
+;= language can correctly define a circuit that references
+;= parameters defined in a separate block. It also tests
+;= the parsing of more complex arguments in the `run` command.
+;=================================================================
+
+(defparam 'theta_1 0.785)
+(defparam 'theta_2 1.57)
+
+(defcircuit 'vqe_ansatz (qubits: 2)
+    ; Create an entangled pair
+    (H 0)
+    (CX 0 1)
+    ; Add parameterized rotation gates
+    (RY 'theta_1 0)
+    (RZ 'theta_2 1)
+)
+
+(defobs 'pauli_sum "1.5 * Z0 I1 + 0.5 * X0 X1")
+
+(run (
+    cost_func: (circuit: 'vqe_ansatz' obs: 'pauli_sum')
+    optimizer: (type: 'Adam' lr: 0.05)
+    steps: 100
+))
+
+
+;=================================================================
+;= Example 3: Invalid Script (Semantic Error)
+;=
+;= Purpose: Tests the `validate_ast` function. The parser
+;= should successfully create an S-expression tree from this,
+;= but the validation step should fail with a clear error
+;= message because `defparam` is missing an argument.
+;=================================================================
+
+(defparam 'alpha) ; ERROR: Missing initial value!
+
+(defcircuit 'broken_circuit (qubits: 1)
+    (RX 'alpha 0)
+)
+
+(run (circuit: 'broken_circuit'))
+
+
+;=================================================================
+;= Example 4: Metaprogramming Test
+;=
+;= Purpose: Tests the ability to define reusable blocks of code.
+;= This is the core of the Forth/Lisp "define new words" idea.
+;= The interpreter would be responsible for expanding this.
+;=================================================================
+
+; First, define a reusable "word" or macro.
+; This defines a layer of rotation gates.
+(def 'rotation_layer (angle)
+    (RY angle 0)
+    (RZ angle 1)
+)
+
+; Now, use that new word inside a larger circuit definition.
+(defcircuit 'macro_circuit (qubits: 2)
+    (H 0)
+    (H 1)
+    ; Use our custom layer with a parameter
+    (rotation_layer 'theta_1)
+    (CX 0 1)
+    ; Use it again with a different parameter
+    (rotation_layer 'theta_2)
+)
+
+
+;=================================================================
+;= Example 5: Suite of Invalid Scripts
+;=
+;= Purpose: To test various failure modes of the parser and
+;= validator.
+;=================================================================
+
+; --- SYNTAX ERRORS (Should be caught by the parser) ---
+
+; Mismatched parenthesis
+(defparam 'mismatch 0.5
+
+; --- SEMANTIC ERRORS (Should be caught by the validator) ---
+
+; Unknown command
+(deffoo 'my_param 1.0)
+
+; Wrong argument type for defcircuit
+(defcircuit 'bad_args "not_a_list_of_args")
+
+; Missing qubits argument
+(defcircuit 'no_qubits
+    (H 0)
+)

@@ -17,6 +17,7 @@
       <sourceFolder url="file://$MODULE_DIR$/qcbm/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/svm-operator/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/wasm-ui/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/qcl/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/qflowc/target" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
