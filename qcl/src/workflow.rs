@@ -23,12 +23,19 @@ pub struct MacroDef {
     pub body: Vec<SymbolicGate>,
 }
 
+/// NEW: Represents a defined observable.
+#[derive(Debug, Clone)]
+pub struct ObsDef {
+    pub name: String,
+    pub operator: String,
+}
+
 pub struct Workflow {
     pub params: HashMap<String, f64>,
     pub circuits: HashMap<String, CircuitDef>,
-    /// A map to store user-defined macros.
     pub macros: HashMap<String, MacroDef>,
-    /// A counter to track the number of simulation runs, useful for testing.
+    /// NEW: A map to store defined observables.
+    pub observables: HashMap<String, ObsDef>,
     pub run_counter: u32,
 }
 
@@ -42,6 +49,7 @@ impl Workflow {
             params: HashMap::new(),
             circuits: HashMap::new(),
             macros: HashMap::new(),
+            observables: HashMap::new(),
             run_counter: 0,
         }
     }
@@ -54,9 +62,14 @@ impl Workflow {
         for decl in declarations {
             match decl {
                 Declaration::DefParam { name, value } => {
-                    // NEW: Evaluate the value as an expression before storing it.
                     let evaluated_value = self.evaluate_expr(value)?;
                     println!("[Workflow] Defining parameter: '{}' = {}", name, evaluated_value);
+                    self.params.insert(name.clone(), evaluated_value);
+                }
+                // NEW: Handle the `let` binding. For now, it behaves like a global defparam.
+                Declaration::Let { name, value } => {
+                    let evaluated_value = self.evaluate_expr(value)?;
+                    println!("[Workflow] Let binding: '{}' = {}", name, evaluated_value);
                     self.params.insert(name.clone(), evaluated_value);
                 }
                 Declaration::DefCircuit { name, qubits, body } => {
@@ -79,9 +92,12 @@ impl Workflow {
                 }
                 Declaration::DefObs { name, operator } => {
                     println!("[Workflow] Defining observable: '{}' = {}", name, operator);
+                    let obs_def = ObsDef { name: name.clone(), operator: operator.clone() };
+                    self.observables.insert(name.clone(), obs_def);
                 }
                 Declaration::Run(run_args) => {
-                    println!("[Workflow] --- Triggering Run ---");
+                    println!("[Workflow] --- Triggering Run (fire and forget) ---");
+                    // For a top-level run, we ignore the result.
                     self.run_simulation(run_args)?;
                 }
                 Declaration::Loop { times, body } => {
@@ -97,8 +113,9 @@ impl Workflow {
         Ok(())
     }
 
-    /// NEW: Recursively evaluates a `Value` as a classical expression.
-    fn evaluate_expr(&self, value: &Value) -> Result<f64, String> {
+    /// Evaluates a `Value` as a classical expression. Now takes `&mut self`
+    /// because evaluating a `run` expression has side effects.
+    fn evaluate_expr(&mut self, value: &Value) -> Result<f64, String> {
         match value {
             Value::Num(n) => Ok(*n),
             Value::Symbol(s) => self.params.get(s)
@@ -110,10 +127,29 @@ impl Workflow {
                 }
                 let op = match &list[0].0 {
                     Value::Str(s) => s.as_str(),
-                    _ => return Err("Expected operator (+, -, *, /) as first element of expression list.".to_string()),
+                    _ => return Err("Expected operator (+, -, *, /) or command (run) as first element of expression list.".to_string()),
                 };
 
-                // Evaluate all arguments recursively.
+                // Check for the special 'run' command before other operators.
+                if op == "run" {
+                    let mut run_args = HashMap::new();
+                    for arg_pair in &list[1..] {
+                        if let (Value::List(pair), _) = arg_pair {
+                            if pair.len() != 2 { return Err("Run argument should be a (key: value) pair".to_string()); }
+                            let key = match &pair[0].0 {
+                                Value::Str(s) => s.trim_end_matches(':').to_string(),
+                                _ => return Err("Expected a keyword key for run argument".to_string())
+                            };
+                            let value = pair[1].0.clone();
+                            run_args.insert(key, value);
+                        } else {
+                            return Err("Expected a list for a run command argument".to_string());
+                        }
+                    }
+                    return self.run_simulation(&run_args);
+                }
+
+                // If not 'run', proceed with arithmetic operators.
                 let args: Vec<f64> = list[1..].iter()
                     .map(|(val, _)| self.evaluate_expr(val))
                     .collect::<Result<_,_>>()?;
@@ -137,7 +173,8 @@ impl Workflow {
         }
     }
 
-    fn run_simulation(&mut self, args: &HashMap<String, Value>) -> Result<(), String> {
+    /// This function now returns a f64 result, representing the expectation value.
+    fn run_simulation(&mut self, args: &HashMap<String, Value>) -> Result<f64, String> {
         let circuit_name = match args.get("circuit") {
             Some(Value::Symbol(s)) => s,
             _ => return Err("Run command must specify a circuit, e.g., (run (circuit: 'my_circ'))".to_string()),
@@ -158,15 +195,28 @@ impl Workflow {
             _ => return Err("Expected 'shots:' argument to be a number.".to_string()),
         };
 
+        // NEW: Get the observable to measure.
+        let obs_name = match args.get("measure") {
+            Some(Value::Symbol(s)) => s,
+            None => return Err("A 'run' expression that returns a value must have a (measure: 'obs_name') argument.".to_string()),
+            _ => return Err("Expected a symbol for the 'measure' argument.".to_string()),
+        };
+        let _obs_def = self.observables.get(obs_name)
+            .ok_or_else(|| format!("Observable '{}' not found.", obs_name))?;
+
         println!("[Workflow] Building concrete circuit for '{}' with {} shots.", circuit_def.name, shots);
 
         let concrete_circuit = self.build_concrete_circuit(circuit_def, &run_params)?;
-
         println!("[Workflow] Concrete circuit built with {} gates.", concrete_circuit.len());
 
         self.run_counter += 1;
 
-        Ok(())
+        // In a real implementation, you would call your simulator here.
+        // let expectation = qsim::run_and_measure(&concrete_circuit, obs_def, shots);
+        let dummy_expectation_value = 0.5;
+        println!("[Workflow] Simulation complete. Measured <{}> = {}", obs_name, dummy_expectation_value);
+
+        Ok(dummy_expectation_value)
     }
 
     fn parse_run_params(&self, pairs: &[(Value, SimpleSpan)]) -> Result<HashMap<String, f64>, String> {
@@ -241,11 +291,9 @@ impl Workflow {
             match &symbolic_gate.args.get(arg_idx) {
                 Some(Value::Num(n)) => Ok(*n),
                 Some(Value::Symbol(s)) => {
-                    // First, check run-local parameters.
                     if let Some(val) = run_params.get(s) {
                         return Ok(*val);
                     }
-                    // Then, check global workflow parameters.
                     self.params.get(s).cloned()
                         .ok_or_else(|| format!("Undefined parameter '{}' for gate '{}'", s, symbolic_gate.name))
                 }
@@ -371,10 +419,14 @@ mod tests {
                 qubits: 1,
                 body: vec![],
             },
+            Declaration::DefObs { name: "dummy_obs".to_string(), operator: "Z0".to_string() },
             Declaration::Loop {
                 times: 5,
                 body: vec![Declaration::Run(
-                    [("circuit".to_string(), Value::Symbol("dummy_circ".to_string()))]
+                    [
+                        ("circuit".to_string(), Value::Symbol("dummy_circ".to_string())),
+                        ("measure".to_string(), Value::Symbol("dummy_obs".to_string())),
+                    ]
                         .iter().cloned().collect()
                 )],
             },
@@ -394,13 +446,17 @@ mod tests {
                 qubits: 1,
                 body: vec![],
             },
+            Declaration::DefObs { name: "dummy_obs".to_string(), operator: "Z0".to_string() },
             Declaration::Loop {
                 times: 3,
                 body: vec![
                     Declaration::Loop {
                         times: 4,
                         body: vec![Declaration::Run(
-                            [("circuit".to_string(), Value::Symbol("dummy_circ".to_string()))]
+                            [
+                                ("circuit".to_string(), Value::Symbol("dummy_circ".to_string())),
+                                ("measure".to_string(), Value::Symbol("dummy_obs".to_string())),
+                            ]
                                 .iter().cloned().collect()
                         )],
                     }
@@ -445,7 +501,6 @@ mod tests {
         assert_eq!(concrete_circuit[1], ConcreteGate::CX { control: 0, target: 1 });
     }
 
-    /// NEW TEST: Verify that a parameter can be defined with a classical expression.
     #[test]
     fn test_expression_evaluation_in_defparam() {
         let declarations = vec![
@@ -457,7 +512,6 @@ mod tests {
                 name: "offset".to_string(),
                 value: Value::Num(0.5),
             },
-            // Define a new parameter by adding the two previous ones.
             Declaration::DefParam {
                 name: "final_angle".to_string(),
                 value: Value::List(vec![
@@ -472,5 +526,36 @@ mod tests {
         workflow.run(declarations).unwrap();
 
         assert_eq!(workflow.params.get("final_angle"), Some(&2.0));
+    }
+
+    /// NEW TEST: Verify that `let` can capture the result of a `run` expression.
+    #[test]
+    fn test_let_binding_with_run_expression() {
+        let declarations = vec![
+            Declaration::DefCircuit { name: "dummy_circ".to_string(), qubits: 1, body: vec![] },
+            Declaration::DefObs { name: "dummy_obs".to_string(), operator: "Z0".to_string() },
+            Declaration::Let {
+                name: "energy".to_string(),
+                value: Value::List(vec![
+                    (Value::Str("run".to_string()), SimpleSpan::from(0..0)),
+                    (Value::List(vec![
+                        (Value::Str("circuit:".to_string()), SimpleSpan::from(0..0)),
+                        (Value::Symbol("dummy_circ".to_string()), SimpleSpan::from(0..0)),
+                    ]), SimpleSpan::from(0..0)),
+                    (Value::List(vec![
+                        (Value::Str("measure:".to_string()), SimpleSpan::from(0..0)),
+                        (Value::Symbol("dummy_obs".to_string()), SimpleSpan::from(0..0)),
+                    ]), SimpleSpan::from(0..0)),
+                ]),
+            },
+        ];
+
+        let mut workflow = Workflow::new();
+        workflow.run(declarations).unwrap();
+
+        // The dummy value from run_simulation is 0.5
+        assert_eq!(workflow.params.get("energy"), Some(&0.5));
+        // The simulation should have been run once.
+        assert_eq!(workflow.run_counter, 1);
     }
 }

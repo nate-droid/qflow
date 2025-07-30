@@ -25,7 +25,11 @@ pub struct Gate {
 pub enum Declaration {
     DefParam {
         name: String,
-        // The value is no longer a raw f64, but a `Value` that can be evaluated later.
+        value: Value,
+    },
+    /// NEW: A declaration for a let binding.
+    Let {
+        name: String,
         value: Value,
     },
     DefCircuit {
@@ -138,9 +142,15 @@ fn try_decl_from_value(val: Value, _span: SimpleSpan) -> Result<Declaration, Str
         "defparam" => {
             if list.len() != 3 { return Err("'defparam' expects 2 arguments".to_string()); }
             let name = match &list[1].0 { Value::Symbol(s) => s.clone(), _ => return Err("Expected a symbol for parameter name".to_string()) };
-            // The value is now just the third element, whatever it is.
             let value = list[2].0.clone();
             Ok(Declaration::DefParam { name, value })
+        }
+        // NEW: Handle parsing a let binding.
+        "let" => {
+            if list.len() != 3 { return Err("'let' expects 2 arguments: a name and a value expression".to_string()); }
+            let name = match &list[1].0 { Value::Symbol(s) => s.clone(), _ => return Err("Expected a symbol for let binding name".to_string()) };
+            let value = list[2].0.clone();
+            Ok(Declaration::Let { name, value })
         }
         "defobs" => {
             if list.len() != 3 { return Err("'defobs' expects 2 arguments".to_string()); }

@@ -9,5 +9,6 @@ export default [
     route("qasm", "routes/qasm.tsx"),
     route("ml-svm", "routes/ml-svm.tsx"),
     route("simulator", "routes/simulator.tsx"),
+    route("qcl", "routes/qcl.tsx"),
   ]),
 ] as const;

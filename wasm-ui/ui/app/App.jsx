@@ -22,6 +22,7 @@ import MlSvmPage from "./pages/MlSvmPage";
 import QasmSubmitterPage from "./pages/QasmSubmitterPage";
 import QcbmSubmitterPage from "./pages/QcbmSubmitterPage";
 import SvmExperimentPage from "./pages/SvmExperimentPage";
+import QclDesigner from "./pages/QclDesignerPage";
 
 //================================================================================
 // --- HELPER & REUSABLE COMPONENTS ---
@@ -655,6 +656,14 @@ const AppLayout = () => (
           >
             Simulator
           </NavLink>
+          <NavLink
+            to="/qcl"
+            className={({ isActive }) =>
+              `py-2 px-1 md:px-2 nav-link ${isActive ? "active" : ""}`
+            }
+          >
+            QCL
+          </NavLink>
         </nav>
       </div>
     </header>
@@ -691,6 +700,7 @@ export default function App() {
             <Route path="qasm" element={<QasmSubmitterPage />} />
             <Route path="ml-svm" element={<MlSvmPage />} />
             <Route path="simulator" element={<CircuitSimulatorPage />} />
+            <Route path="qcl" element={<QclDesigner />} />
           </Route>
         </Routes>
       </ClientOnly>
