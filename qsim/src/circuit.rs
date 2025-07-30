@@ -25,6 +25,10 @@ impl Circuit {
     pub fn num_moments(&self) -> usize {
         self.moments.len()
     }
+
+    pub fn set_num_qubits(&mut self, num_qubits: usize) {
+        self.num_qubits = num_qubits;
+    }
 }
 impl fmt::Display for Circuit {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -77,10 +81,48 @@ impl fmt::Display for Circuit {
 // this is a naive implementation, and does nothing to optimize the circuit (yet)
 pub fn gates_to_circuit(gates: Vec<Gate>) -> Circuit {
     let mut circuit = Circuit::new();
+
+    // Determine the number of qubits based on the highest qubit index in the gates
+    let mut highest_qubit = 0;
+
     for gate in gates {
         circuit.add_gate(gate);
+
+        // iterate through the targets of the gate to find the highest qubit index
+        for qubit in gate.target() {
+            if qubit > highest_qubit {
+                highest_qubit = qubit;
+            }
+        }
+
     }
+
+    circuit.set_num_qubits(highest_qubit +1); // +1 because qubits are 0-indexed
+
     circuit
+}
+
+pub fn circuit_to_qasm(circuit: &Circuit) -> String {
+    let mut qasm = String::new();
+    qasm.push_str("OPENQASM 2.0;\n");
+    qasm.push_str("include \"qelib1.inc\";\n");
+    qasm.push_str(&format!("qreg q[{}];\n", circuit.num_qubits));
+
+    for moment in &circuit.moments {
+        for gate in moment {
+            match gate {
+                Gate::H{qubit} => qasm.push_str(&format!("H q[{}];\n", qubit)),
+                Gate::X{qubit} => qasm.push_str(&format!("X q[{}];\n", qubit)),
+                Gate::Y{qubit} => qasm.push_str(&format!("Y q[{}];\n", qubit)),
+                Gate::Z{qubit} => qasm.push_str(&format!("Z q[{}];\n", qubit)),
+                Gate::CX{control, target} | Gate::CNOT {control, target} => {
+                    qasm.push_str(&format!("CX q[{}],q[{}];\n", control, target));
+                }
+                _ => panic!("Unsupported gate type: {:?}", gate),
+            }
+        }
+    }
+    qasm
 }
 
 // tests
@@ -100,5 +142,30 @@ mod tests {
         let expected_output = "q0: [H]─●────\nq1: ────⊕─[X]\n";
         assert_eq!(format!("{}", circuit), expected_output);
         println!("{}", circuit);
+    }
+
+    #[test]
+    fn test_gates_to_circuit() {
+        let gates = vec![
+            Gate::H{qubit: 0},
+            Gate::CX{control: 0, target: 1},
+            Gate::X{qubit: 1},
+        ];
+        let circuit = gates_to_circuit(gates);
+        assert_eq!(circuit.num_moments(), 3);
+        assert_eq!(circuit.num_qubits, 2);
+    }
+
+    #[test]
+    fn circuit_to_qasm_test() {
+        let mut circuit = Circuit::new();
+        circuit.num_qubits = 2;
+        circuit.add_moment(vec![Gate::H{qubit: 0}]);
+        circuit.add_moment(vec![Gate::CX{control: 0, target: 1}]);
+        circuit.add_moment(vec![Gate::X{qubit: 1}]);
+
+        let qasm = circuit_to_qasm(&circuit);
+        let expected_qasm = "OPENQASM 2.0;\ninclude \"qelib1.inc\";\nqreg q[2];\nH q[0];\nCX q[0],q[1];\nX q[1];\n";
+        assert_eq!(qasm, expected_qasm);
     }
 }
