@@ -3,19 +3,33 @@ import React, { useState, useCallback, useMemo, useEffect } from "react";
 // --- Helper Components ---
 
 // Icon for a specific gate
-const GateIcon = ({ gate }) => {
+const GateIcon = ({ gate, theta }) => {
   const gateStyles = {
     H: "bg-yellow-500 border-yellow-600",
     X: "bg-red-500 border-red-600",
     Y: "bg-green-500 border-green-600",
     Z: "bg-blue-500 border-blue-600",
+    RX: "bg-purple-500 border-purple-600",
+    RY: "bg-pink-500 border-pink-600",
+    RZ: "bg-orange-500 border-orange-600",
   };
   const style = gateStyles[gate] || "bg-gray-400 border-gray-500";
   return (
     <div
-      className={`w-8 h-8 rounded-md flex items-center justify-center text-white font-bold text-sm border-b-2 ${style}`}
+      className={`w-8 h-8 rounded-md flex items-center justify-center text-white font-bold text-xs border-b-2 ${style} flex-col`}
+      title={theta !== undefined ? `${gate}(${theta})` : gate}
     >
-      {gate}
+      <span>
+        {gate}
+        {theta !== undefined ? (
+          <span style={{ fontSize: "0.7em" }}>
+            <sub>θ</sub>
+          </span>
+        ) : null}
+      </span>
+      {theta !== undefined && (
+        <span style={{ fontSize: "0.7em" }}>{Number(theta).toFixed(2)}</span>
+      )}
     </div>
   );
 };
@@ -42,6 +56,8 @@ const CnotTarget = () => (
 const GatePalette = ({
   selectedGate,
   setSelectedGate,
+  theta,
+  setTheta,
   addQubit,
   removeQubit,
   numQubits,
@@ -50,7 +66,7 @@ const GatePalette = ({
   isSimulating,
   wasmLoaded,
 }) => {
-  const gates = ["H", "X", "Y", "Z", "CNOT"];
+  const gates = ["H", "X", "Y", "Z", "RX", "RY", "RZ", "CNOT"];
 
   return (
     <div className="p-4 bg-gray-800 rounded-lg shadow-lg text-white">
@@ -92,6 +108,32 @@ const GatePalette = ({
             </button>
           ))}
         </div>
+        {(selectedGate === "RX" ||
+          selectedGate === "RY" ||
+          selectedGate === "RZ") && (
+          <div className="mt-4 flex flex-col items-center">
+            <label htmlFor="theta-input" className="mb-1 text-sm font-medium">
+              θ (radians)
+            </label>
+            <input
+              id="theta-input"
+              type="number"
+              step="any"
+              min="0"
+              max={Math.PI * 2}
+              className="w-24 px-2 py-1 rounded bg-gray-700 border border-gray-500 text-white"
+              value={theta}
+              onChange={(e) => {
+                const val = Number(e.target.value);
+                if (!isNaN(val)) setTheta(val);
+              }}
+              placeholder="e.g. 3.14"
+            />
+            <span className="text-xs text-gray-400 mt-1">
+              Set θ for rotation
+            </span>
+          </div>
+        )}
       </div>
 
       <div className="mt-6 space-y-2">
@@ -123,6 +165,7 @@ const CircuitGrid = ({
   setMoments,
   selectedGate,
   setSelectedGate,
+  theta,
 }) => {
   const [cnotState, setCnotState] = useState({
     isConnecting: false,
@@ -203,13 +246,37 @@ const CircuitGrid = ({
           };
         }
       } else {
-        newMoments[momentIndex].push({ type: selectedGate, qubit: qubitIndex });
+        // If rotation gate, include theta
+        if (
+          selectedGate === "RX" ||
+          selectedGate === "RY" ||
+          selectedGate === "RZ"
+        ) {
+          // Only place if theta is a valid number
+          if (typeof theta === "number" && !isNaN(theta)) {
+            newMoments[momentIndex].push({
+              type: selectedGate,
+              qubit: qubitIndex,
+              theta,
+            });
+          } else {
+            alert("Please enter a valid θ (theta) value for rotation gates.");
+            return;
+          }
+        } else {
+          newMoments[momentIndex].push({
+            type: selectedGate,
+            qubit: qubitIndex,
+          });
+        }
       }
       setMoments(newMoments);
     }
   };
 
   const numMoments = 20;
+  const cellHeight = 64; // Increased for more space
+  const cellWidth = 48;
 
   const gridCells = useMemo(() => {
     const cells = [];
@@ -224,7 +291,52 @@ const CircuitGrid = ({
         );
 
         if (singleQubitGate) {
-          gateComponent = <GateIcon gate={singleQubitGate.type} />;
+          if (
+            singleQubitGate.type === "RX" ||
+            singleQubitGate.type === "RY" ||
+            singleQubitGate.type === "RZ"
+          ) {
+            gateComponent = (
+              <div
+                className="flex flex-col items-center"
+                style={{ minHeight: "64px" }}
+              >
+                <GateIcon
+                  gate={singleQubitGate.type}
+                  theta={singleQubitGate.theta}
+                />
+                <input
+                  type="number"
+                  step="any"
+                  min="0"
+                  max={Math.PI * 2}
+                  value={singleQubitGate.theta}
+                  onClick={(e) => e.stopPropagation()}
+                  onChange={(e) => {
+                    const newTheta = Number(e.target.value);
+                    if (isNaN(newTheta)) return;
+                    const newMoments = [...moments];
+                    const moment = newMoments[m];
+                    const gateIdx = moment.findIndex(
+                      (g) => g.qubit === q && g.type === singleQubitGate.type,
+                    );
+                    if (gateIdx !== -1) {
+                      moment[gateIdx] = {
+                        ...moment[gateIdx],
+                        theta: newTheta,
+                      };
+                      setMoments(newMoments);
+                    }
+                  }}
+                  className="w-16 px-1 py-0.5 mt-2 rounded bg-gray-700 border border-gray-500 text-white text-xs"
+                  style={{ fontSize: "0.8em" }}
+                  title="Edit θ"
+                />
+              </div>
+            );
+          } else {
+            gateComponent = <GateIcon gate={singleQubitGate.type} />;
+          }
         } else if (cnotGate) {
           if (cnotGate.control === q) {
             gateComponent = <CnotControl />;
@@ -241,7 +353,20 @@ const CircuitGrid = ({
         cells.push(
           <div
             key={`${q}-${m}`}
-            className={`w-12 h-12 flex items-center justify-center rounded-md transition-colors duration-200 cursor-pointer ${isPendingCnotControl ? "bg-blue-500/30" : "hover:bg-gray-700/50"}`}
+            className={`w-12`}
+            style={{
+              width: `${cellWidth}px`,
+              height: `${cellHeight}px`,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              borderRadius: "0.375rem",
+              transition: "background-color 0.2s",
+              cursor: "pointer",
+              backgroundColor: isPendingCnotControl
+                ? "rgba(59,130,246,0.18)"
+                : undefined,
+            }}
             onClick={() => handleCellClick(q, m)}
           >
             {gateComponent}
@@ -260,15 +385,15 @@ const CircuitGrid = ({
         if (gate.type === "CNOT") {
           const topQubit = Math.min(gate.control, gate.target);
           const bottomQubit = Math.max(gate.control, gate.target);
-          const height = (bottomQubit - topQubit) * 48;
+          const height = (bottomQubit - topQubit) * cellHeight;
 
           lines.push(
             <div
               key={`${momentIndex}-${gateIndex}`}
               className="absolute bg-blue-500 w-0.5"
               style={{
-                left: `${momentIndex * 48 + 23.5}px`,
-                top: `${topQubit * 48 + 24}px`,
+                left: `${momentIndex * cellWidth + 23.5}px`,
+                top: `${topQubit * cellHeight + 32}px`,
                 height: `${height}px`,
               }}
             />,
@@ -283,14 +408,14 @@ const CircuitGrid = ({
     <div className="flex-grow p-4 bg-gray-900 rounded-lg overflow-x-auto">
       <div
         className="relative inline-block"
-        style={{ minWidth: `${numMoments * 48}px` }}
+        style={{ minWidth: `${numMoments * cellWidth}px` }}
       >
         <div className="absolute inset-0 z-0">{cnotLines}</div>
         <div
           className="relative z-10 grid"
           style={{
-            gridTemplateColumns: `repeat(${numMoments}, 48px)`,
-            gridTemplateRows: `repeat(${numQubits}, 48px)`,
+            gridTemplateColumns: `repeat(${numMoments}, ${cellWidth}px)`,
+            gridTemplateRows: `repeat(${numQubits}, ${cellHeight}px)`,
           }}
         >
           {Array.from({ length: numQubits }).map((_, qIndex) => (
@@ -298,7 +423,7 @@ const CircuitGrid = ({
               key={`line-${qIndex}`}
               className="absolute h-0.5 bg-gray-500"
               style={{
-                top: `${qIndex * 48 + 23.5}px`,
+                top: `${qIndex * cellHeight + 31.5}px`,
                 left: "16px",
                 right: "16px",
                 zIndex: -1,
@@ -311,7 +436,7 @@ const CircuitGrid = ({
           <div
             key={`label-${qIndex}`}
             className="absolute text-gray-400 font-mono text-sm"
-            style={{ left: "-40px", top: `${qIndex * 48 + 14}px` }}
+            style={{ left: "-40px", top: `${qIndex * cellHeight + 20}px` }}
           >
             q{qIndex}:
           </div>
@@ -381,6 +506,7 @@ export default function CircuitSimulatorPage() {
   const [wasm, setWasm] = useState(null);
   const [simResult, setSimResult] = useState(null);
   const [isSimulating, setIsSimulating] = useState(false);
+  const [theta, setTheta] = useState(Math.PI / 2); // Default theta for rotation gates
 
   // QASM export modal state
   const [isQasmModalOpen, setIsQasmModalOpen] = useState(false);
@@ -464,9 +590,26 @@ export default function CircuitSimulatorPage() {
   // QASM Export logic
   const handleExportQasm = () => {
     if (!wasm) return;
+    // Sanitize theta for RX/RY/RZ gates before export
+    const sanitizedMoments = moments.map((moment) =>
+      moment
+        ? moment.map((gate) => {
+            if (
+              (gate.type === "RX" ||
+                gate.type === "RY" ||
+                gate.type === "RZ") &&
+              (typeof gate.theta !== "number" || isNaN(gate.theta))
+            ) {
+              // Default to pi/2 if invalid
+              return { ...gate, theta: Math.PI / 2 };
+            }
+            return gate;
+          })
+        : moment,
+    );
     const circuitPayload = {
       numQubits: numQubits,
-      moments: moments.filter((m) => m && m.length > 0),
+      moments: sanitizedMoments.filter((m) => m && m.length > 0),
     };
     const circuitJson = JSON.stringify(circuitPayload);
     try {
@@ -508,6 +651,8 @@ export default function CircuitSimulatorPage() {
             <GatePalette
               selectedGate={selectedGate}
               setSelectedGate={setSelectedGate}
+              theta={theta}
+              setTheta={setTheta}
               addQubit={() => handleQubitChange(numQubits + 1)}
               removeQubit={() => handleQubitChange(numQubits - 1)}
               numQubits={numQubits}
@@ -536,6 +681,7 @@ export default function CircuitSimulatorPage() {
                 setMoments={setMoments}
                 selectedGate={selectedGate}
                 setSelectedGate={setSelectedGate}
+                theta={theta}
               />
             </div>
             <SimulationOutput
