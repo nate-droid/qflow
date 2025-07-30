@@ -461,6 +461,17 @@ async fn run_ml_svm(
     let image = "qsim:latest"; // Replace with your actual image
     let csv_file_name = "input.csv";
 
+    // TODO: refactor this to create a QFlowTaskSpec for SVM
+    // let quantum_task = qflow_types::QFlowTask {
+    //     name: "qasm-task".to_string(),
+    //     depends_on: None,
+    //     spec: QFlowTaskSpec::Quantum {
+    //         image: "your-quantum-image:latest".to_string(), // <-- Replace with your actual image
+    //         circuit: qasm_data.clone(),
+    //         params: "".to_string(), // You may want to parse/accept params separately
+    //     },
+    // };
+
     // Save the uploaded CSV to a location accessible by the Job (e.g., a PVC or object storage)
     // For now, this is a placeholder. You may need to implement PVC upload or use a shared volume.
     // Here, we assume the Job can access the file at /data/input.csv

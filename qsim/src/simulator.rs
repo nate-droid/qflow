@@ -17,6 +17,9 @@ pub trait Simulator {
     fn measure_pauli_string_expectation(&mut self, operators: Vec<Gate>) -> f64;
     fn get_statevector(&self) -> &StateVector;
     fn get_num_qubits(&self) -> usize;
+
+    // compile the circuit to openqasm
+    fn compile_to_qasm(&self) -> String;
 }
 
 pub trait QuantumGate {
@@ -94,6 +97,13 @@ impl Simulator for QuantumSimulator {
 
     fn get_num_qubits(&self) -> usize {
         self.num_qubits
+    }
+
+    fn compile_to_qasm(&self) -> String {
+        todo!("Implement QASM compilation for the simulator");
+        // This method would typically convert the current state of the simulator
+        // into a QASM representation. For simplicity, we return an empty string here.
+        String::new()
     }
 }
 
