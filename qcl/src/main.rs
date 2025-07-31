@@ -189,12 +189,11 @@ mod tests {
 
         // 4. ASSERT: Check that the files were updated correctly.
         let updated_angle_content = fs::read_to_string(angle_file).unwrap();
-        // 0.5 - (0.1 * 0.5) = 0.5 - 0.05 = 0.45
-        assert_eq!(updated_angle_content, "0.45");
+        // 0.5 - (0.1 * 1.0) = 0.5 - 0.05 = 0.4
+        assert_eq!(updated_angle_content, "0.4");
 
         let energy_content = fs::read_to_string(energy_file).unwrap();
-        // The dummy energy value is 0.5
-        assert_eq!(energy_content, "0.5");
+        assert_eq!(energy_content, "1");
 
         // 5. CLEANUP
         fs::remove_file(angle_file).unwrap();

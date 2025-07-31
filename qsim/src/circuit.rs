@@ -32,6 +32,14 @@ impl Circuit {
     pub fn set_num_qubits(&mut self, num_qubits: usize) {
         self.num_qubits = num_qubits;
     }
+
+    pub fn moments(&self) -> &Vec<Vec<Gate>> {
+        &self.moments
+    }
+
+    pub fn gates_flat(&self) -> Vec<&Gate> {
+        self.moments.iter().flat_map(|m| m.iter()).collect()
+    }
 }
 impl fmt::Display for Circuit {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

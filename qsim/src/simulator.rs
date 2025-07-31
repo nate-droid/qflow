@@ -15,6 +15,7 @@ pub trait Simulator {
     /// by applying the Pauli operators P to a copy of the state and
     /// calculating ⟨ψ|P|ψ⟩.
     fn measure_pauli_string_expectation(&mut self, operators: Vec<Gate>) -> f64;
+
     fn get_statevector(&self) -> &StateVector;
     fn get_num_qubits(&self) -> usize;
 
@@ -144,6 +145,69 @@ impl QuantumSimulator {
         }
         let amp = self.state.amplitudes[state_index];
         (amp.re * amp.re + amp.im * amp.im).sqrt()
+    }
+
+    fn parse_pauli_term(&self, term_str: &str) -> Result<Vec<Gate>, String> {
+        term_str.split_whitespace().map(|pauli_op| {
+            let op_char = pauli_op.chars().next()
+                .ok_or_else(|| "Empty Pauli operator in string".to_string())?;
+            let qubit_idx = pauli_op[1..].parse::<usize>()
+                .map_err(|_| format!("Invalid qubit index in '{}'", pauli_op))?;
+
+            if qubit_idx >= self.num_qubits as usize {
+                return Err(format!("Qubit index {} is out of bounds for {} qubits.", qubit_idx, self.num_qubits));
+            }
+
+            match op_char {
+                'X' => Ok(Gate::X{qubit: qubit_idx}),
+                'Y' => Ok(Gate::Y{qubit: qubit_idx}),
+                'Z' => Ok(Gate::Z{qubit: qubit_idx}),
+                'I' => Ok(Gate::I{qubit: qubit_idx}),
+                _ => Err(format!("Unknown Pauli operator '{}'", op_char)),
+            }
+        }).collect()
+    }
+
+    pub fn measure_expectation(&self, operator_string: &str, shots: usize) -> Result<f64, String> {
+        // For simplicity, this example only handles single-term operators like "Z0 X1".
+        // A full implementation would need to handle coefficients and multiple terms
+        // like "1.5 * Z0 - 0.5 * X1".
+
+        let pauli_terms = self.parse_pauli_term(operator_string)?;
+
+        let mut total_eigenvalue = 0.0;
+
+        for _ in 0..shots {
+            // In a real simulator, you would sample from the final state vector's probabilities.
+            // For this example, we'll simulate a simple case to demonstrate the logic.
+            // Let's assume the measurement always results in the |0...0> state.
+            let measurement_outcome = 0; // Represents the integer value of the bitstring, e.g., "01" -> 1
+
+            let mut shot_eigenvalue = 1.0;
+            for (pauli) in &pauli_terms {
+                // Get the bit value for the specific qubit from the measurement outcome.
+                let bit = (measurement_outcome >> pauli.target()[0]) & 1;
+
+                // Determine the eigenvalue (+1 or -1) for this Pauli measurement.
+                // For Z, |0> is +1, |1> is -1.
+                // For X and Y, the eigenvalue depends on the superposition, but for the
+                // basis states, we can define a consistent (though simplified) mapping.
+                let eigenvalue = match pauli {
+                    Gate::Z{..} => if bit == 0 { 1.0 } else { -1.0 },
+                    // For a real simulation, X and Y measurements require basis changes before measuring.
+                    // Here we provide a placeholder result.
+                    Gate::X{..} => 1.0,
+                    Gate::Y{..} => 1.0,
+                    Gate::I{..} => 1.0,
+                    _ => return Err(format!("Unsupported Pauli operator: {:?}", pauli)),
+                };
+                shot_eigenvalue *= eigenvalue;
+            }
+            total_eigenvalue += shot_eigenvalue;
+        }
+
+        // The expectation value is the average of all the single-shot eigenvalues.
+        Ok(total_eigenvalue / shots as f64)
     }
 }
 

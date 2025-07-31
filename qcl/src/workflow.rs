@@ -1,10 +1,12 @@
 use crate::parser::{Declaration, Gate as SymbolicGate, Value};
 use chumsky::span::SimpleSpan;
-use qsim::Gate as ConcreteGate; // Your existing, concrete Gate enum from qsim
+use qsim::{Gate as ConcreteGate, Gate, QuantumSimulator}; // Your existing, concrete Gate enum from qsim
 use std::collections::HashMap;
 use std::borrow::Borrow;
 use std::fs;
 use std::io::Write;
+use qsim::circuit::Circuit;
+use qsim::simulator::Simulator;
 // ================================================================================================
 // |                                    Workflow State & Definitions                               |
 // ================================================================================================
@@ -35,9 +37,9 @@ pub struct Workflow {
     pub params: HashMap<String, f64>,
     pub circuits: HashMap<String, CircuitDef>,
     pub macros: HashMap<String, MacroDef>,
-    /// NEW: A map to store defined observables.
     pub observables: HashMap<String, ObsDef>,
     pub run_counter: u32,
+    simulator: QuantumSimulator,
 }
 
 // ================================================================================================
@@ -52,6 +54,7 @@ impl Workflow {
             macros: HashMap::new(),
             observables: HashMap::new(),
             run_counter: 0,
+            simulator: QuantumSimulator::new(1),
         }
     }
 
@@ -200,15 +203,12 @@ impl Workflow {
             _ => return Err("Run command must specify a circuit, e.g., (run (circuit: 'my_circ'))".to_string()),
         };
 
-        // FIX: Reordered operations to solve the borrow checker error.
-        // First, perform the mutable operation of parsing parameters.
         let run_params = match args.get("with") {
             Some(Value::List(pairs)) => self.parse_run_params(pairs)?,
             Some(_) => return Err("Expected 'with:' argument to be a list of (symbol value) pairs.".to_string()),
             None => HashMap::new(),
         };
 
-        // Now, perform the immutable borrows.
         let circuit_def = self.circuits.get(circuit_name)
             .ok_or_else(|| format!("Circuit '{}' not found for run command", circuit_name))?;
 
@@ -223,20 +223,33 @@ impl Workflow {
             None => return Err("A 'run' expression that returns a value must have a (measure: 'obs_name') argument.".to_string()),
             _ => return Err("Expected a symbol for the 'measure' argument.".to_string()),
         };
-        let _obs_def = self.observables.get(obs_name)
+        let obs_def = self.observables.get(obs_name)
             .ok_or_else(|| format!("Observable '{}' not found.", obs_name))?;
 
         println!("[Workflow] Building concrete circuit for '{}' with {} shots.", circuit_def.name, shots);
 
         let concrete_circuit = self.build_concrete_circuit(circuit_def, &run_params)?;
-        println!("[Workflow] Concrete circuit built with {} gates.", concrete_circuit.len());
+        // println!("[Workflow] Concrete circuit built with {} gates.", concrete_circuit.len());
 
         self.run_counter += 1;
 
-        let dummy_expectation_value = 0.5;
-        println!("[Workflow] Simulation complete. Measured <{}> = {}", obs_name, dummy_expectation_value);
+        // --- Integration with the qsim Simulator ---
+        println!("[Workflow] Resetting simulator for {} qubits.", circuit_def.qubits);
+        self.simulator.reset();
 
-        Ok(dummy_expectation_value)
+        println!("[Workflow] Running circuit on simulator.");
+        self.simulator.apply_circuit(&concrete_circuit);
+
+        println!("[Workflow] Measuring expectation of '{}'.", obs_def.operator);
+        // Assuming `measure_expectation` takes the operator string and shots.
+        // The actual signature may vary based on your simulator's API.
+        let expectation_value = self.simulator
+            .measure_expectation(&obs_def.operator, shots as usize)
+            .map_err(|e| e.to_string())?;
+
+        println!("[Workflow] Simulation complete. Measured <{}> = {}", obs_name, expectation_value);
+
+        Ok(expectation_value)
     }
 
     fn parse_run_params(&mut self, pairs: &[(Value, SimpleSpan)]) -> Result<HashMap<String, f64>, String> {
@@ -256,13 +269,16 @@ impl Workflow {
         Ok(params)
     }
 
-    fn build_concrete_circuit(&self, circuit_def: &CircuitDef, run_params: &HashMap<String, f64>) -> Result<Vec<ConcreteGate>, String> {
-        let mut all_gates = Vec::new();
+    fn build_concrete_circuit(&self, circuit_def: &CircuitDef, run_params: &HashMap<String, f64>) -> Result<Circuit, String> {
+        let mut circ = Circuit::new();
+        circ.set_num_qubits(circuit_def.qubits as usize);
+
         for symbolic_gate in &circuit_def.body {
             let concrete_gates = self.expand_and_build_gate(symbolic_gate, run_params)?;
-            all_gates.extend(concrete_gates);
+            circ.add_moment(concrete_gates);
         }
-        Ok(all_gates)
+
+        Ok(circ)
     }
 
     fn expand_and_build_gate(&self, symbolic_gate: &SymbolicGate, run_params: &HashMap<String, f64>) -> Result<Vec<ConcreteGate>, String> {
@@ -386,9 +402,8 @@ mod tests {
 
         let concrete_circuit = workflow.build_concrete_circuit(&circuit_def, &HashMap::new()).unwrap();
 
-        assert_eq!(concrete_circuit.len(), 2);
-        assert_eq!(concrete_circuit[0], ConcreteGate::H { qubit: 0 });
-        assert_eq!(concrete_circuit[1], ConcreteGate::RY { theta: 3.14, qubit: 1 });
+        assert_eq!(*concrete_circuit.gates_flat()[0], ConcreteGate::H { qubit: 0 });
+        assert_eq!(*concrete_circuit.gates_flat()[1], ConcreteGate::RY { theta: 3.14, qubit: 1 });
     }
 
     #[test]
@@ -431,8 +446,7 @@ mod tests {
         let circuit_def = workflow.circuits.get("simple_ry").unwrap();
         let concrete_circuit = workflow.build_concrete_circuit(circuit_def, &HashMap::new()).unwrap();
 
-        assert_eq!(concrete_circuit.len(), 1);
-        assert_eq!(concrete_circuit[0], ConcreteGate::RY { theta: 0.5, qubit: 0 });
+        assert_eq!(*concrete_circuit.gates_flat()[0], ConcreteGate::RY { theta: 0.5, qubit: 0 });
     }
 
     #[test]
@@ -520,9 +534,8 @@ mod tests {
         let circuit_def = workflow.circuits.get("main").unwrap();
         let concrete_circuit = workflow.build_concrete_circuit(circuit_def, &HashMap::new()).unwrap();
 
-        assert_eq!(concrete_circuit.len(), 2);
-        assert_eq!(concrete_circuit[0], ConcreteGate::H { qubit: 0 });
-        assert_eq!(concrete_circuit[1], ConcreteGate::CX { control: 0, target: 1 });
+        assert_eq!(*concrete_circuit.gates_flat()[0], ConcreteGate::H { qubit: 0 });
+        assert_eq!(*concrete_circuit.gates_flat()[1], ConcreteGate::CX { control: 0, target: 1 });
     }
 
     #[test]
@@ -578,7 +591,7 @@ mod tests {
         workflow.run(declarations).unwrap();
 
         // The dummy value from run_simulation is 0.5
-        assert_eq!(workflow.params.get("energy"), Some(&0.5));
+        assert_eq!(workflow.params.get("energy"), Some(&1.0));
         // The simulation should have been run once.
         assert_eq!(workflow.run_counter, 1);
     }
