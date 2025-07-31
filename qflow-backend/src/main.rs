@@ -1,6 +1,5 @@
 use axum::extract::Multipart;
 use axum::extract::Request;
-use axum::response::Html;
 use axum::routing::post;
 use axum::{
     Form, Json, Router,
@@ -11,17 +10,15 @@ use axum::{
 
 use k8s_openapi::api::{batch::v1::Job, core::v1::Pod};
 use kube::{
-    Client, CustomResource,
+    Client,
     api::{Api, ListParams, LogParams, PostParams},
 };
-use qflow_types::{QFlowTaskSpec, QuantumSVMWorkflowSpec, QuantumWorkflow, QuantumWorkflowSpec};
+use qflow_types::{QFlowTaskSpec, QuantumWorkflow, QuantumWorkflowSpec};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::io::Write;
-use std::process::Stdio;
 use std::{collections::HashMap, sync::Arc};
 use tempfile::NamedTempFile;
-use tokio::io::AsyncReadExt;
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::TraceLayer;
 
@@ -76,7 +73,6 @@ struct Task {
     quantum: Option<serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     classical: Option<serde_json::Value>,
-    /// Added field to support QCBM tasks in the API response.
     #[serde(skip_serializing_if = "Option::is_none")]
     qcbm: Option<serde_json::Value>,
 }
@@ -86,7 +82,6 @@ struct Task {
 struct Status {
     task_status: HashMap<String, String>,
 }
-// --- END: API-Specific Response Models ---
 
 struct AppState {
     client: Client,
@@ -115,7 +110,7 @@ async fn main() {
             get(fetch_task_results),
         )
         .route("/api/workflows/{namespace}/new", post(submit_workflow))
-        .route("/api/ml/svm", axum::routing::post(run_ml_svm))
+        .route("/api/ml/svm", post(run_ml_svm))
         .layer(
             TraceLayer::new_for_http()
                 .make_span_with(|req: &Request| {
@@ -133,7 +128,6 @@ async fn main() {
                 })
                 .on_failure(()),
         )
-        // This endpoint remains hypothetical as it depends on a `qflowc` library
         .route("/api/workflows/{namespace}/{name}/qasm", post(submit_qasm))
         .with_state(app_state)
         .layer(cors);
@@ -151,13 +145,11 @@ async fn fetch_workflow(
     let wf_api: Api<QuantumWorkflow> = Api::namespaced(state.client.clone(), &params.namespace);
     let job_api: Api<Job> = Api::namespaced(state.client.clone(), &params.namespace);
 
-    // 1. Fetch the source of truth: the QuantumWorkflow CR
     let workflow_cr = wf_api.get(&workflow_name).await.map_err(|e| {
         eprintln!("Error fetching QuantumWorkflow '{}': {}", workflow_name, e);
         StatusCode::NOT_FOUND
     })?;
 
-    // 2. List all jobs in the namespace and create a map from task name to Job status
     let all_jobs = job_api.list(&ListParams::default()).await.map_err(|e| {
         eprintln!("Error listing jobs: {}", e);
         StatusCode::INTERNAL_SERVER_ERROR
@@ -167,7 +159,6 @@ async fn fetch_workflow(
     for job in all_jobs.items {
         if let Some(owner_refs) = job.metadata.owner_references.as_ref() {
             if owner_refs.iter().any(|owner| owner.name == workflow_name) {
-                // This job belongs to our workflow. Find its task name from the label.
                 if let Some(labels) = job.metadata.labels {
                     if let Some(task_name) = labels.get("qflow.io/task-name") {
                         let status_str = match job.status {
@@ -184,7 +175,6 @@ async fn fetch_workflow(
         }
     }
 
-    // 3. Build the synthetic response
     let mut tasks = Vec::new();
     let mut task_status_map = HashMap::new();
 
@@ -223,7 +213,6 @@ async fn fetch_workflow(
             qcbm,
         });
 
-        // Use the status from the job map, or default to Pending if no job is found yet
         let status = job_status_map
             .get(&task_name)
             .cloned()
@@ -252,7 +241,6 @@ async fn fetch_task_results(
     let pods: Api<Pod> = Api::namespaced(state.client.clone(), &namespace);
     let jobs: Api<Job> = Api::namespaced(state.client.clone(), &namespace);
 
-    // Find the job associated with the task name to construct the correct pod label selector
     let job_list = jobs.list(&ListParams::default()).await.map_err(|e| {
         eprintln!("Error listing jobs: {}", e);
         StatusCode::INTERNAL_SERVER_ERROR
@@ -284,7 +272,6 @@ async fn fetch_task_results(
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
-    // Find a succeeded pod to fetch logs from
     if let Some(pod) = pod_list.items.into_iter().find(|p| {
         p.status
             .as_ref()
@@ -299,7 +286,6 @@ async fn fetch_task_results(
                     StatusCode::INTERNAL_SERVER_ERROR
                 })?;
 
-            // Try to parse logs as JSON, otherwise return as raw string
             match serde_json::from_str::<serde_json::Value>(&logs) {
                 Ok(json_value) => Ok(Json(json_value)),
                 Err(_) => Ok(Json(serde_json::json!({ "raw_logs": logs }))),
@@ -337,7 +323,6 @@ async fn submit_workflow(
         status: Default::default(),
     };
 
-    // Create or update the QuantumWorkflow CR
     match wf_api
         .create(&PostParams::default(), &quantum_workflow)
         .await
@@ -361,24 +346,21 @@ async fn submit_qasm(
         workflow_name, qasm_data
     );
 
-    // Construct a Quantum task using the QASM string
     let quantum_task = qflow_types::QFlowTask {
         name: "qasm-task".to_string(),
         depends_on: None,
         spec: QFlowTaskSpec::Quantum {
-            image: "your-quantum-image:latest".to_string(), // <-- Replace with your actual image
+            image: "your-quantum-image:latest".to_string(),
             circuit: qasm_data.clone(),
-            params: "".to_string(), // You may want to parse/accept params separately
+            params: "".to_string(),
         },
     };
 
-    // Build the workflow spec
     let workflow_spec = QuantumWorkflowSpec {
         volume: None,
         tasks: vec![quantum_task],
     };
 
-    // Build the QuantumWorkflow CR
     let quantum_workflow = QuantumWorkflow {
         metadata: kube::api::ObjectMeta {
             name: Some(workflow_name.clone()),
@@ -389,7 +371,6 @@ async fn submit_qasm(
         status: Default::default(),
     };
 
-    // Submit to Kubernetes
     let wf_api: Api<QuantumWorkflow> = Api::namespaced(state.client.clone(), &namespace);
 
     match wf_api
@@ -408,7 +389,6 @@ async fn submit_qasm(
 struct MlSvmParams {
     test_size: f64,
     target_column: String,
-    // ... other params
 }
 
 #[derive(Serialize)]
@@ -421,7 +401,6 @@ async fn run_ml_svm(
     State(state): State<Arc<AppState>>,
     mut multipart: Multipart,
 ) -> Result<Json<serde_json::Value>, StatusCode> {
-    // --- 1. Parse multipart form ---
     let mut csv_path = None;
     let mut target_column = None;
     let mut test_size = None;
@@ -454,10 +433,9 @@ async fn run_ml_svm(
     let target_column = target_column.ok_or(StatusCode::BAD_REQUEST)?;
     let test_size = test_size.ok_or(StatusCode::BAD_REQUEST)?;
 
-    // --- 2. Construct Kubernetes Job manifest ---
     let job_name = format!("ml-svm-job-{}", "job-12345");
-    let namespace = "default"; // You may want to extract this from the request or config
-    let image = "qsim:latest"; // Replace with your actual image
+    let namespace = "default";
+    let image = "qsim:latest";
     let csv_file_name = "input.csv";
 
     // TODO: refactor this to create a QFlowTaskSpec for SVM
@@ -514,8 +492,7 @@ async fn run_ml_svm(
             }
         }
     });
-
-    // --- 3. Submit Job to Kubernetes ---
+    
     let job_api: Api<Job> = Api::namespaced(state.client.clone(), namespace);
     let job: Job =
         serde_json::from_value(job_spec).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;

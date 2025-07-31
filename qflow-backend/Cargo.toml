@@ -12,9 +12,6 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tower-http = { version = "0.6.6", features = ["cors"] } # Add this line
 tempfile = "3.11.0"
-qflowc = { path = "../qflowc" }
 qflow-types = { path = "../qflow-types" }
-serde_yaml = "0.9.34+deprecated"
 schemars = { version = "1.0.4", features = ["derive"] }
 tracing = "0.1.41"
-base64 = "0.22.1"

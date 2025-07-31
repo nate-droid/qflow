@@ -26,16 +26,13 @@ fn main() {
 
     println!("Attempting to parse QCL code...\n");
 
-    // In chumsky v0.10+, `parse` returns a `ParseResult` struct.
     let result = qcl_parser().parse(qcl_code);
 
-    // We can check for errors and print them...
     if result.has_errors() {
         println!("--- Parsing Failed ---");
         result.errors().for_each(|e| println!("Error: {}", e));
     }
 
-    // ...and we can get the output if parsing was successful.
     if let Some(ast) = result.output() {
         println!("--- Successfully Parsed AST ---");
         println!("{:#?}", ast);
@@ -44,11 +41,10 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    use super::parser::{Declaration, Gate, Value, qcl_parser, validate_ast};
+    use super::parser::{Declaration, Value, qcl_parser, validate_ast};
     use crate::parser;
     use crate::workflow::Workflow;
     use chumsky::Parser;
-    use std::collections::HashMap;
     use std::fs;
 
     /// Pre-processes the QCL code to remove comments and normalize whitespace.
@@ -91,7 +87,6 @@ mod tests {
             .expect("Validation failed when it should have succeeded.");
         assert_eq!(ast.len(), 3, "Expected 3 top-level declarations");
 
-        // Check the first declaration
         match &ast[0] {
             Declaration::DefParam { name, value } => {
                 assert_eq!(name, "learning_rate");
@@ -115,13 +110,11 @@ mod tests {
             .expect("Validation failed when it should have succeeded.");
         assert_eq!(ast.len(), 2);
 
-        // Check the circuit declaration
         match &ast[1] {
             Declaration::DefCircuit { name, qubits, body } => {
                 assert_eq!(name, "vqe_ansatz");
                 assert_eq!(*qubits, 2);
                 assert_eq!(body.len(), 2);
-                // Check that the gate arguments were parsed correctly
                 assert_eq!(body[0].args[0], Value::Symbol("theta_1".to_string()));
             }
             _ => panic!("Expected a DefCircuit declaration"),
@@ -134,15 +127,12 @@ mod tests {
             (defparam 'alpha) ; ERROR: Missing initial value!
         "#;
 
-        // The pre-processor will clean the code, so the parser will receive `(defparam 'alpha)`.
-        // This is syntactically valid, but semantically invalid.
         let validation_result = run_parser_and_validate(qcl_code);
         assert!(
             validation_result.is_err(),
             "Validator should have failed but didn't"
         );
 
-        // Check for the expected error message
         let error_message = validation_result.err().unwrap();
         assert!(error_message.contains("'defparam' expects 2 arguments"));
     }
@@ -154,8 +144,6 @@ mod tests {
             (defparam 'mismatch 0.5
         "#;
 
-        // The pre-processor will clean the code, so the parser will receive `(defparam 'mismatch 0.5`.
-        // This is syntactically invalid.
         let validation_result = run_parser_and_validate(qcl_code);
         assert!(validation_result.is_err());
         assert!(validation_result.err().unwrap().contains("Parser failed"));
@@ -184,19 +172,17 @@ mod tests {
         let ast = run_parser_and_validate(&content)
             .expect("Validation failed when it should have succeeded.");
 
-        // 3. EXECUTE: Create a workflow and run the AST.
         let mut workflow = Workflow::new();
         workflow.run(ast).expect("Workflow execution failed");
 
-        // 4. ASSERT: Check that the files were updated correctly.
         let updated_angle_content = fs::read_to_string(angle_file).unwrap();
+
         // 0.5 - (0.1 * 1.0) = 0.5 - 0.05 = 0.4
         assert_eq!(updated_angle_content, "0.4");
 
         let energy_content = fs::read_to_string(energy_file).unwrap();
         assert_eq!(energy_content, "1");
 
-        // 5. CLEANUP
         fs::remove_file(angle_file).unwrap();
         fs::remove_file(energy_file).unwrap();
     }

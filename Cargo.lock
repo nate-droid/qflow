@@ -1766,15 +1766,12 @@ name = "qflow-backend"
 version = "0.1.0"
 dependencies = [
  "axum",
- "base64",
  "k8s-openapi",
  "kube",
  "qflow-types",
- "qflowc",
  "schemars 1.0.4",
  "serde",
  "serde_json",
- "serde_yaml",
  "tempfile",
  "tokio",
  "tower-http",

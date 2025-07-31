@@ -2,14 +2,10 @@ use crate::parser::{Declaration, Gate as SymbolicGate, Value};
 use chumsky::span::SimpleSpan;
 use qsim::circuit::Circuit;
 use qsim::simulator::Simulator;
-use qsim::{Gate as ConcreteGate, Gate, QuantumSimulator}; // Your existing, concrete Gate enum from qsim
-use std::borrow::Borrow;
+use qsim::{Gate as ConcreteGate, QuantumSimulator};
 use std::collections::HashMap;
 use std::fs;
 use std::io::Write;
-// ================================================================================================
-// |                                    Workflow State & Definitions                               |
-// ================================================================================================
 
 #[derive(Debug, Clone)]
 pub struct CircuitDef {
@@ -26,7 +22,6 @@ pub struct MacroDef {
     pub body: Vec<SymbolicGate>,
 }
 
-/// NEW: Represents a defined observable.
 #[derive(Debug, Clone)]
 pub struct ObsDef {
     pub name: String,
@@ -41,10 +36,6 @@ pub struct Workflow {
     pub run_counter: u32,
     simulator: QuantumSimulator,
 }
-
-// ================================================================================================
-// |                                     Execution Logic                                          |
-// ================================================================================================
 
 impl Workflow {
     pub fn new() -> Self {
@@ -73,7 +64,6 @@ impl Workflow {
                     );
                     self.params.insert(name.clone(), evaluated_value);
                 }
-                // NEW: Handle the `let` binding. For now, it behaves like a global defparam.
                 Declaration::Let { name, value } => {
                     let evaluated_value = self.evaluate_expr(value)?;
                     println!("[Workflow] Let binding: '{}' = {}", name, evaluated_value);
@@ -181,7 +171,6 @@ impl Workflow {
                         }
                         return self.run_simulation(&run_args);
                     }
-                    // NEW: Handle the read-file expression
                     "read-file" => {
                         if list.len() != 2 {
                             return Err(
@@ -202,7 +191,6 @@ impl Workflow {
                     _ => {} // Fall through to arithmetic operators
                 }
 
-                // If not 'run', proceed with arithmetic operators.
                 let args: Vec<f64> = list[1..]
                     .iter()
                     .map(|(val, _)| self.evaluate_expr(val))
@@ -282,11 +270,9 @@ impl Workflow {
         );
 
         let concrete_circuit = self.build_concrete_circuit(circuit_def, &run_params)?;
-        // println!("[Workflow] Concrete circuit built with {} gates.", concrete_circuit.len());
 
         self.run_counter += 1;
 
-        // --- Integration with the qsim Simulator ---
         println!(
             "[Workflow] Resetting simulator for {} qubits.",
             circuit_def.qubits
@@ -300,8 +286,7 @@ impl Workflow {
             "[Workflow] Measuring expectation of '{}'.",
             obs_def.operator
         );
-        // Assuming `measure_expectation` takes the operator string and shots.
-        // The actual signature may vary based on your simulator's API.
+
         let expectation_value = self
             .simulator
             .measure_expectation(&obs_def.operator, shots as usize)
@@ -476,10 +461,6 @@ impl Workflow {
         }
     }
 }
-
-// ================================================================================================
-// |                                             Tests                                            |
-// ================================================================================================
 
 #[cfg(test)]
 mod tests {
@@ -838,11 +819,9 @@ mod tests {
         let content = fs::read_to_string(test_file).unwrap();
         assert_eq!(content, "1.23");
 
-        // Cleanup
         fs::remove_file(test_file).unwrap();
     }
 
-    /// NEW TEST: Verify reading from a file.
     #[test]
     fn test_read_file() {
         let test_file = "test_read_input.tmp";
@@ -861,7 +840,6 @@ mod tests {
 
         assert_eq!(workflow.params.get("read_val"), Some(&4.56));
 
-        // Cleanup
         fs::remove_file(test_file).unwrap();
     }
 }

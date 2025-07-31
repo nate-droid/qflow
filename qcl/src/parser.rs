@@ -3,10 +3,6 @@ use chumsky::prelude::*;
 use chumsky::span::SimpleSpan;
 use std::collections::HashMap;
 
-// ================================================================================================
-// |                                  Abstract Syntax Tree (AST)                                  |
-// ================================================================================================
-
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value {
     Num(f64),
@@ -27,7 +23,6 @@ pub enum Declaration {
         name: String,
         value: Value,
     },
-    /// NEW: A declaration for a let binding.
     Let {
         name: String,
         value: Value,
@@ -56,10 +51,6 @@ pub enum Declaration {
         body: Vec<Declaration>,
     },
 }
-
-// ================================================================================================
-// |                                       Chumsky Parser                                         |
-// ================================================================================================
 
 pub fn qcl_parser<'a>()
 -> impl Parser<'a, &'a str, Vec<(Value, SimpleSpan)>, extra::Err<Simple<'a, char>>> {
@@ -112,10 +103,6 @@ pub fn qcl_parser<'a>()
         .collect::<Vec<_>>()
         .then_ignore(end())
 }
-
-// ================================================================================================
-// |                                      Semantic Validation                                     |
-// ================================================================================================
 
 pub fn validate_ast(raw_s_exprs: &[(Value, SimpleSpan)]) -> Result<Vec<Declaration>, String> {
     raw_s_exprs
@@ -177,7 +164,6 @@ fn try_decl_from_value(val: Value, _span: SimpleSpan) -> Result<Declaration, Str
             let value = list[2].0.clone();
             Ok(Declaration::DefParam { name, value })
         }
-        // NEW: Handle parsing a let binding.
         "let" => {
             if list.len() != 3 {
                 return Err("'let' expects 2 arguments: a name and a value expression".to_string());
