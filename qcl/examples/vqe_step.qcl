@@ -1,0 +1,38 @@
+; This script performs a single optimization step. It reads a parameter
+; from a file, runs a simulation, calculates a new parameter, and
+; writes it back to the file for the next iteration.
+
+; --- 1. Define the necessary quantum components ---
+
+(defcircuit 'vqe_ansatz (qubits 1)
+  ; A simple ansatz that takes one angle parameter.
+  (H 0)
+  (RY 'theta 0)
+)
+
+(defobs 'z_observable "Z0")
+
+; --- 2. The main logic for one optimization step ---
+
+; Read the current angle from the "classical node".
+(let 'current_angle (read-file "angle.txt"))
+
+; Run the simulation on the "quantum node" using the current angle
+; and capture the resulting energy.
+(let 'energy (run
+  (circuit: 'vqe_ansatz)
+  (measure: 'z_observable)
+  (with: (('theta 'current_angle)))
+))
+
+; Classically calculate the new angle.
+; This is a placeholder for a real gradient calculation.
+(let 'learning_rate 0.1)
+(let 'new_angle (- 'current_angle (* 'learning_rate 'energy)))
+
+; Write the updated angle back to the "classical node" for the
+; next iteration to pick up.
+(write-file "angle.txt" 'new_angle)
+
+; Also, log the energy result for analysis.
+(write-file "last_energy.txt" 'energy)

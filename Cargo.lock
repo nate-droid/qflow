@@ -1769,6 +1769,7 @@ version = "0.1.0"
 dependencies = [
  "ariadne",
  "chumsky 0.10.1",
+ "qflow-types",
  "qsim",
  "yansi",
 ]

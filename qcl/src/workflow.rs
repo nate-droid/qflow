@@ -3,7 +3,8 @@ use chumsky::span::SimpleSpan;
 use qsim::Gate as ConcreteGate; // Your existing, concrete Gate enum from qsim
 use std::collections::HashMap;
 use std::borrow::Borrow;
-
+use std::fs;
+use std::io::Write;
 // ================================================================================================
 // |                                    Workflow State & Definitions                               |
 // ================================================================================================
@@ -72,6 +73,12 @@ impl Workflow {
                     println!("[Workflow] Let binding: '{}' = {}", name, evaluated_value);
                     self.params.insert(name.clone(), evaluated_value);
                 }
+                Declaration::WriteFile { path, value } => {
+                    let value_to_write = self.evaluate_expr(value)?;
+                    println!("[Workflow] Writing value {} to file '{}'", value_to_write, path);
+                    let mut file = fs::File::create(path).map_err(|e| e.to_string())?;
+                    file.write_all(value_to_write.to_string().as_bytes()).map_err(|e| e.to_string())?;
+                }
                 Declaration::DefCircuit { name, qubits, body } => {
                     println!("[Workflow] Defining circuit: '{}'", name);
                     let circuit_def = CircuitDef {
@@ -131,22 +138,35 @@ impl Workflow {
                 };
 
                 // Check for the special 'run' command before other operators.
-                if op == "run" {
-                    let mut run_args = HashMap::new();
-                    for arg_pair in &list[1..] {
-                        if let (Value::List(pair), _) = arg_pair {
-                            if pair.len() != 2 { return Err("Run argument should be a (key: value) pair".to_string()); }
-                            let key = match &pair[0].0 {
-                                Value::Str(s) => s.trim_end_matches(':').to_string(),
-                                _ => return Err("Expected a keyword key for run argument".to_string())
-                            };
-                            let value = pair[1].0.clone();
-                            run_args.insert(key, value);
-                        } else {
-                            return Err("Expected a list for a run command argument".to_string());
+                match op {
+                    "run" => {
+                        let mut run_args = HashMap::new();
+                        for arg_pair in &list[1..] {
+                            if let (Value::List(pair), _) = arg_pair {
+                                if pair.len() != 2 { return Err("Run argument should be a (key: value) pair".to_string()); }
+                                let key = match &pair[0].0 {
+                                    Value::Str(s) => s.trim_end_matches(':').to_string(),
+                                    _ => return Err("Expected a keyword key for run argument".to_string())
+                                };
+                                let value = pair[1].0.clone();
+                                run_args.insert(key, value);
+                            } else {
+                                return Err("Expected a list for a run command argument".to_string());
+                            }
                         }
+                        return self.run_simulation(&run_args);
                     }
-                    return self.run_simulation(&run_args);
+                    // NEW: Handle the read-file expression
+                    "read-file" => {
+                        if list.len() != 2 { return Err("'read-file' expects exactly one argument: a file path".to_string()); }
+                        let path = match &list[1].0 {
+                            Value::Str(s) => s,
+                            _ => return Err("File path for 'read-file' must be a string.".to_string()),
+                        };
+                        let content = fs::read_to_string(path).map_err(|e| e.to_string())?;
+                        return content.trim().parse::<f64>().map_err(|e| e.to_string());
+                    }
+                    _ => {} // Fall through to arithmetic operators
                 }
 
                 // If not 'run', proceed with arithmetic operators.
@@ -180,14 +200,17 @@ impl Workflow {
             _ => return Err("Run command must specify a circuit, e.g., (run (circuit: 'my_circ'))".to_string()),
         };
 
-        let circuit_def = self.circuits.get(circuit_name)
-            .ok_or_else(|| format!("Circuit '{}' not found for run command", circuit_name))?;
-
+        // FIX: Reordered operations to solve the borrow checker error.
+        // First, perform the mutable operation of parsing parameters.
         let run_params = match args.get("with") {
             Some(Value::List(pairs)) => self.parse_run_params(pairs)?,
             Some(_) => return Err("Expected 'with:' argument to be a list of (symbol value) pairs.".to_string()),
             None => HashMap::new(),
         };
+
+        // Now, perform the immutable borrows.
+        let circuit_def = self.circuits.get(circuit_name)
+            .ok_or_else(|| format!("Circuit '{}' not found for run command", circuit_name))?;
 
         let shots = match args.get("shots") {
             Some(Value::Num(n)) => *n as u64,
@@ -195,7 +218,6 @@ impl Workflow {
             _ => return Err("Expected 'shots:' argument to be a number.".to_string()),
         };
 
-        // NEW: Get the observable to measure.
         let obs_name = match args.get("measure") {
             Some(Value::Symbol(s)) => s,
             None => return Err("A 'run' expression that returns a value must have a (measure: 'obs_name') argument.".to_string()),
@@ -211,21 +233,23 @@ impl Workflow {
 
         self.run_counter += 1;
 
-        // In a real implementation, you would call your simulator here.
-        // let expectation = qsim::run_and_measure(&concrete_circuit, obs_def, shots);
         let dummy_expectation_value = 0.5;
         println!("[Workflow] Simulation complete. Measured <{}> = {}", obs_name, dummy_expectation_value);
 
         Ok(dummy_expectation_value)
     }
 
-    fn parse_run_params(&self, pairs: &[(Value, SimpleSpan)]) -> Result<HashMap<String, f64>, String> {
+    fn parse_run_params(&mut self, pairs: &[(Value, SimpleSpan)]) -> Result<HashMap<String, f64>, String> {
         let mut params = HashMap::new();
         for (pair_val, _) in pairs {
             if let Value::List(p) = pair_val {
                 if p.len() != 2 { return Err("Parameter override must be a (symbol value) pair".to_string()); }
-                let name = match &p[0].0 { Value::Symbol(s) => s.clone(), _ => return Err("Expected symbol for parameter override name".to_string()) };
-                let val = match &p[1].0 { Value::Num(n) => *n, _ => return Err("Expected number for parameter override value".to_string()) };
+                let name = match &p[0].0 {
+                    Value::Symbol(s) => s.clone(),
+                    _ => return Err("Expected symbol for parameter override name".to_string())
+                };
+                // FIX: Evaluate the value, allowing it to be a symbol or another expression.
+                let val = self.evaluate_expr(&p[1].0)?;
                 params.insert(name, val);
             }
         }
@@ -557,5 +581,51 @@ mod tests {
         assert_eq!(workflow.params.get("energy"), Some(&0.5));
         // The simulation should have been run once.
         assert_eq!(workflow.run_counter, 1);
+    }
+
+    #[test]
+    fn test_write_file() {
+        let test_file = "test_write_output.tmp";
+        let declarations = vec![
+            Declaration::DefParam { name: "my_val".to_string(), value: Value::Num(1.23) },
+            Declaration::WriteFile {
+                path: test_file.to_string(),
+                value: Value::Symbol("my_val".to_string()),
+            },
+        ];
+
+        let mut workflow = Workflow::new();
+        workflow.run(declarations).unwrap();
+
+        let content = fs::read_to_string(test_file).unwrap();
+        assert_eq!(content, "1.23");
+
+        // Cleanup
+        fs::remove_file(test_file).unwrap();
+    }
+
+    /// NEW TEST: Verify reading from a file.
+    #[test]
+    fn test_read_file() {
+        let test_file = "test_read_input.tmp";
+        fs::write(test_file, "4.56").unwrap();
+
+        let declarations = vec![
+            Declaration::Let {
+                name: "read_val".to_string(),
+                value: Value::List(vec![
+                    (Value::Str("read-file".to_string()), SimpleSpan::from(0..0)),
+                    (Value::Str(test_file.to_string()), SimpleSpan::from(0..0)),
+                ]),
+            },
+        ];
+
+        let mut workflow = Workflow::new();
+        workflow.run(declarations).unwrap();
+
+        assert_eq!(workflow.params.get("read_val"), Some(&4.56));
+
+        // Cleanup
+        fs::remove_file(test_file).unwrap();
     }
 }

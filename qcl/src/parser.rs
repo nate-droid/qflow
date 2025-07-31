@@ -32,6 +32,10 @@ pub enum Declaration {
         name: String,
         value: Value,
     },
+    WriteFile {
+        path: String,
+        value: Value,
+    },
     DefCircuit {
         name: String,
         qubits: u64,
@@ -73,7 +77,20 @@ pub fn qcl_parser<'a>() -> impl Parser<'a, &'a str, Vec<(Value, SimpleSpan)>, ex
             .then_ignore(just('"'))
             .map(|s: &str| Value::Str(s.to_string()));
 
-        let ident = text::ident().map(|s: &str| Value::Str(s.to_string()));
+        let word_parser = text::ident()
+            .then(just('-').then(text::ident()).repeated())
+            .to_slice();
+
+        // An identifier can be a normal word, a keyword ending in a colon, or an operator.
+        let keyword = word_parser.clone().then(just(':')).to_slice();
+        let operator = one_of("+-*/").repeated().at_least(1).to_slice();
+
+        // The order is important: try the more specific `keyword` before the general `word_parser`.
+        let ident = keyword
+            .or(word_parser)
+            .or(operator)
+            .map(|s: &str| Value::Str(s.to_string()));
+
 
         let atom = num.or(str_lit).or(symbol).or(ident);
 
@@ -151,6 +168,15 @@ fn try_decl_from_value(val: Value, _span: SimpleSpan) -> Result<Declaration, Str
             let name = match &list[1].0 { Value::Symbol(s) => s.clone(), _ => return Err("Expected a symbol for let binding name".to_string()) };
             let value = list[2].0.clone();
             Ok(Declaration::Let { name, value })
+        }
+        "write-file" => {
+            if list.len() != 3 { return Err("'write-file' expects 2 arguments: a path and a value".to_string()); }
+            let path = match &list[1].0 {
+                Value::Str(s) => s.clone(),
+                _ => return Err("Expected a string for the file path in 'write-file'".to_string()),
+            };
+            let value = list[2].0.clone();
+            Ok(Declaration::WriteFile { path, value })
         }
         "defobs" => {
             if list.len() != 3 { return Err("'defobs' expects 2 arguments".to_string()); }
