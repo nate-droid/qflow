@@ -103,13 +103,61 @@ const QclCodeEditor = ({ code, setCode, errorLine }) => {
       { type: "number", regex: /[0-9.-]+/, color: "#82aaff" },
       { type: "paren", regex: /[()]/, color: "#e2e8f0" },
     ];
+
+    // A single regex to find any of our tokens
     const combinedRegex = new RegExp(
       tokenDefs.map((t) => `(${t.regex.source})`).join("|"),
       "g",
     );
 
     return code.split("\n").map((line, lineIndex) => {
-      const parts = line.split(combinedRegex).filter(Boolean);
+      const parts = [];
+      let lastIndex = 0;
+
+      // Use matchAll for a more robust tokenizing approach compared to split()
+      for (const match of line.matchAll(combinedRegex)) {
+        const tokenIndex = match.index;
+
+        // 1. Add any text that appeared before this token (e.g., whitespace)
+        if (tokenIndex > lastIndex) {
+          parts.push(line.substring(lastIndex, tokenIndex));
+        }
+
+        // 2. Figure out which token type we matched and get its value
+        const tokenValue = match[0];
+        let matchedDef = null;
+        // Find which capturing group was successful.
+        for (let i = 1; i < match.length; i++) {
+          if (match[i] !== undefined) {
+            matchedDef = tokenDefs[i - 1];
+            break;
+          }
+        }
+
+        // 3. Add the token itself, wrapped in a styled span
+        if (matchedDef && matchedDef.color) {
+          parts.push(
+            <span
+              key={`${lineIndex}-${lastIndex}`}
+              style={{ color: matchedDef.color }}
+            >
+              {tokenValue}
+            </span>,
+          );
+        } else {
+          // This handles any non-styled tokens (like whitespace if it were included)
+          parts.push(tokenValue);
+        }
+
+        // 4. Update our position in the string
+        lastIndex = tokenIndex + tokenValue.length;
+      }
+
+      // 5. Add any remaining text after the last token on the line
+      if (lastIndex < line.length) {
+        parts.push(line.substring(lastIndex));
+      }
+
       return (
         <div
           key={lineIndex}
@@ -118,18 +166,9 @@ const QclCodeEditor = ({ code, setCode, errorLine }) => {
           <span className="w-8 inline-block text-slate-600 text-right pr-4 select-none">
             {lineIndex + 1}
           </span>
-          {parts.map((part, partIndex) => {
-            for (const def of tokenDefs) {
-              if (new RegExp(`^${def.regex.source}$`).test(part)) {
-                return (
-                  <span key={partIndex} style={{ color: def.color }}>
-                    {part}
-                  </span>
-                );
-              }
-            }
-            return <React.Fragment key={partIndex}>{part}</React.Fragment>;
-          })}
+          {parts.map((part, partIndex) => (
+            <React.Fragment key={partIndex}>{part}</React.Fragment>
+          ))}
         </div>
       );
     });
@@ -582,7 +621,7 @@ const QclIdePage = () => {
         };
       } else if (["RX", "RY", "RZ"].includes(gate.type)) {
         simGate = {
-          type: gate.type,
+          type: "gate.type",
           qubit: gateQubits[0],
           theta: resolvedArgs.find((a) => typeof a === "number"),
         };
