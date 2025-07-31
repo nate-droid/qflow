@@ -2,13 +2,6 @@ import React, { useState, useMemo, useEffect, useRef } from "react";
 
 // --- Helper Hooks & Utils ---
 
-/**
- * A custom hook to debounce a value.
- * This is useful to prevent rapid-firing events, like parsing code on every keystroke.
- * @param {any} value The value to debounce.
- * @param {number} delay The debounce delay in milliseconds.
- * @returns The debounced value.
- */
 function useDebounce(value, delay) {
   const [debouncedValue, setDebouncedValue] = useState(value);
   useEffect(() => {
@@ -22,11 +15,6 @@ function useDebounce(value, delay) {
   return debouncedValue;
 }
 
-/**
- * Parses QCL code to extract parameter definitions.
- * @param {string} code The QCL code string.
- * @returns {object} An object mapping parameter names to their values.
- */
 function parseParameters(code) {
   const params = {};
   const regex = /\(defparam\s+'([a-zA-Z0-9_-]+)\s+([0-9.-]+)\)/g;
@@ -37,11 +25,6 @@ function parseParameters(code) {
   return params;
 }
 
-/**
- * Parses QCL code to extract the first circuit definition.
- * @param {string} code The QCL code string.
- * @returns {object|null} A structured object representing the circuit or null if not found.
- */
 function parseCircuit(code) {
   const circuitRegex =
     /\(defcircuit\s+'([a-zA-Z0-9_-]+)\s+\(\s*([\s\S]*?)\s*\)\)/;
@@ -78,18 +61,63 @@ function parseCircuit(code) {
   return {
     name,
     gates,
-    numQubits: maxQubit + 1,
+    numQubits: maxQubit > -1 ? maxQubit + 1 : 0,
   };
 }
+
+//================================================================================
+// --- Reusable Circuit Components from CircuitSimulatorPage.jsx ---
+//================================================================================
+
+const GateIcon = ({ gate, theta }) => {
+  const gateStyles = {
+    H: "bg-yellow-500 border-yellow-600",
+    X: "bg-red-500 border-red-600",
+    CX: "bg-blue-500 border-blue-600",
+    CNOT: "bg-blue-500 border-blue-600",
+    RX: "bg-purple-500 border-purple-600",
+  };
+  const style = gateStyles[gate] || "bg-gray-400 border-gray-500";
+  return (
+    <div
+      className={`w-10 h-10 rounded-md flex items-center justify-center text-white font-bold text-xs border-b-2 ${style} flex-col`}
+      title={theta !== undefined ? `${gate}(${theta})` : gate}
+    >
+      <span>{gate}</span>
+    </div>
+  );
+};
+
+const CnotControl = () => (
+  <div className="w-10 h-10 flex items-center justify-center">
+    <div className="w-4 h-4 bg-blue-500 rounded-full border-2 border-blue-300"></div>
+  </div>
+);
+
+const CnotTarget = () => (
+  <div className="w-10 h-10 flex items-center justify-center relative">
+    <div className="w-8 h-8 border-2 border-blue-500 rounded-full flex items-center justify-center">
+      <div className="w-0.5 h-5 bg-blue-500 absolute"></div>
+      <div className="w-5 h-0.5 bg-blue-500 absolute"></div>
+    </div>
+  </div>
+);
 
 //================================================================================
 // --- QCL IDE COMPONENTS ---
 //================================================================================
 
-/**
- * A simple code editor with syntax highlighting for our custom QCL language.
- */
 const QclCodeEditor = ({ code, setCode, errorLine }) => {
+  const editorRef = useRef(null);
+  const backdropRef = useRef(null);
+
+  const handleScroll = (e) => {
+    if (backdropRef.current) {
+      backdropRef.current.scrollTop = e.target.scrollTop;
+      backdropRef.current.scrollLeft = e.target.scrollLeft;
+    }
+  };
+
   const highlightedCode = useMemo(() => {
     const tokenDefs = [
       { type: "comment", regex: /;.*/, color: "#676e95" },
@@ -104,7 +132,6 @@ const QclCodeEditor = ({ code, setCode, errorLine }) => {
       { type: "paren", regex: /[()]/, color: "#e2e8f0" },
     ];
 
-    // A single regex to find any of our tokens
     const combinedRegex = new RegExp(
       tokenDefs.map((t) => `(${t.regex.source})`).join("|"),
       "g",
@@ -114,27 +141,19 @@ const QclCodeEditor = ({ code, setCode, errorLine }) => {
       const parts = [];
       let lastIndex = 0;
 
-      // Use matchAll for a more robust tokenizing approach compared to split()
       for (const match of line.matchAll(combinedRegex)) {
         const tokenIndex = match.index;
-
-        // 1. Add any text that appeared before this token (e.g., whitespace)
         if (tokenIndex > lastIndex) {
           parts.push(line.substring(lastIndex, tokenIndex));
         }
-
-        // 2. Figure out which token type we matched and get its value
         const tokenValue = match[0];
         let matchedDef = null;
-        // Find which capturing group was successful.
         for (let i = 1; i < match.length; i++) {
           if (match[i] !== undefined) {
             matchedDef = tokenDefs[i - 1];
             break;
           }
         }
-
-        // 3. Add the token itself, wrapped in a styled span
         if (matchedDef && matchedDef.color) {
           parts.push(
             <span
@@ -145,15 +164,10 @@ const QclCodeEditor = ({ code, setCode, errorLine }) => {
             </span>,
           );
         } else {
-          // This handles any non-styled tokens (like whitespace if it were included)
           parts.push(tokenValue);
         }
-
-        // 4. Update our position in the string
         lastIndex = tokenIndex + tokenValue.length;
       }
-
-      // 5. Add any remaining text after the last token on the line
       if (lastIndex < line.length) {
         parts.push(line.substring(lastIndex));
       }
@@ -179,27 +193,27 @@ const QclCodeEditor = ({ code, setCode, errorLine }) => {
       <div className="p-3 border-b border-slate-700 flex-shrink-0">
         <h3 className="text-base font-bold text-slate-200">QCL Code Editor</h3>
       </div>
-      <div className="relative h-full overflow-hidden">
+      <div className="relative flex-1 overflow-hidden">
         <pre
-          className="p-4 rounded-b-lg overflow-auto whitespace-pre h-full"
+          ref={backdropRef}
+          className="absolute inset-0 p-4 pl-12 whitespace-pre font-mono text-sm leading-6 pointer-events-none overflow-auto"
           style={{ margin: 0 }}
         >
           {highlightedCode}
         </pre>
         <textarea
+          ref={editorRef}
           value={code}
           onChange={(e) => setCode(e.target.value)}
+          onScroll={handleScroll}
           spellCheck="false"
-          className="absolute top-0 left-0 w-full h-full p-4 pl-12 bg-transparent text-transparent caret-white resize-none border-0 outline-none overflow-auto whitespace-pre font-mono text-sm leading-6"
+          className="absolute inset-0 p-4 pl-12 bg-transparent text-transparent caret-white resize-none border-0 outline-none overflow-auto whitespace-pre font-mono text-sm leading-6"
         />
       </div>
     </div>
   );
 };
 
-/**
- * The dashboard for displaying and controlling classical parameters.
- */
 const ParameterDashboard = ({ params, onParamChange }) => {
   return (
     <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700 h-full flex flex-col">
@@ -249,149 +263,6 @@ const ParameterDashboard = ({ params, onParamChange }) => {
   );
 };
 
-/**
- * A visual representation of the quantum circuit.
- */
-const QuantumCircuitVisualizer = ({ circuit }) => {
-  const GATE_WIDTH = 40;
-  const PADDING = 20;
-
-  if (!circuit || circuit.numQubits === 0) {
-    return (
-      <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700 h-full flex flex-col">
-        <h3 className="text-base font-bold text-slate-200 mb-4 border-b border-slate-600 pb-2">
-          Circuit Visualizer
-        </h3>
-        <div className="text-center text-slate-400 pt-10 flex-grow">
-          <p>Define a valid circuit in the editor to see a visualization.</p>
-        </div>
-      </div>
-    );
-  }
-
-  const timeSlots = Array(circuit.numQubits).fill(0);
-  const gatePositions = circuit.gates.map((gate) => {
-    const involvedQubits = gate.qubits;
-    const startTimeSlot = Math.max(...involvedQubits.map((q) => timeSlots[q]));
-    const position = {
-      x: startTimeSlot * (GATE_WIDTH + PADDING) + PADDING,
-      gate,
-    };
-    const endTimeSlot = startTimeSlot + 1;
-    involvedQubits.forEach((q) => (timeSlots[q] = endTimeSlot));
-    return position;
-  });
-
-  const circuitWidth =
-    Math.max(1, ...timeSlots) * (GATE_WIDTH + PADDING) + PADDING * 2;
-
-  return (
-    <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700 h-full flex flex-col">
-      <h3 className="text-base font-bold text-slate-200 mb-4 border-b border-slate-600 pb-2">
-        Circuit:{" "}
-        <span className="font-mono text-indigo-300">{circuit.name}</span>
-      </h3>
-      <div className="overflow-x-auto overflow-y-hidden flex-grow relative">
-        <svg width={circuitWidth} height="100%" className="min-h-[150px]">
-          {Array.from({ length: circuit.numQubits }).map((_, i) => (
-            <g key={`qubit-${i}`}>
-              <line
-                x1="0"
-                y1={30 + i * 50}
-                x2={circuitWidth}
-                y2={30 + i * 50}
-                stroke="#475569"
-                strokeWidth="2"
-              />
-              <text
-                x="5"
-                y={35 + i * 50}
-                fill="#94a3b8"
-                fontSize="12"
-                className="font-mono"
-              >{`q${i}`}</text>
-            </g>
-          ))}
-          {gatePositions.map(({ x, gate }, index) => {
-            const isControlled =
-              gate.type.startsWith("C") && gate.qubits.length > 1;
-            const controlQubit = isControlled ? gate.qubits[0] : -1;
-            const targetQubits = isControlled
-              ? gate.qubits.slice(1)
-              : gate.qubits;
-
-            return (
-              <g key={index}>
-                {isControlled &&
-                  targetQubits.map((targetQubit) => (
-                    <line
-                      key={`line-${targetQubit}`}
-                      x1={x + GATE_WIDTH / 2}
-                      y1={30 + controlQubit * 50}
-                      x2={x + GATE_WIDTH / 2}
-                      y2={30 + targetQubit * 50}
-                      stroke="#818cf8"
-                      strokeWidth="2"
-                    />
-                  ))}
-                {isControlled && (
-                  <circle
-                    cx={x + GATE_WIDTH / 2}
-                    cy={30 + controlQubit * 50}
-                    r="5"
-                    fill="#818cf8"
-                  />
-                )}
-                {targetQubits.map((qubitIndex) => (
-                  <g
-                    key={`gate-${qubitIndex}`}
-                    transform={`translate(${x}, ${10 + qubitIndex * 50})`}
-                  >
-                    <rect
-                      width={GATE_WIDTH}
-                      height={GATE_WIDTH}
-                      rx="4"
-                      fill={isControlled ? "#4338ca" : "#6366f1"}
-                      stroke="#a5b4fc"
-                    />
-                    <text
-                      x={GATE_WIDTH / 2}
-                      y={GATE_WIDTH / 2 + 5}
-                      textAnchor="middle"
-                      fill="white"
-                      fontSize="14"
-                      fontWeight="bold"
-                    >
-                      {isControlled ? gate.type.substring(1) : gate.type}
-                    </text>
-                    {gate.args.some((arg) => arg.startsWith("'")) && (
-                      <text
-                        x={GATE_WIDTH / 2}
-                        y={GATE_WIDTH + 12}
-                        textAnchor="middle"
-                        fill="#f78c6c"
-                        fontSize="10"
-                        className="font-mono"
-                      >
-                        {gate.args
-                          .find((arg) => arg.startsWith("'"))
-                          .substring(1)}
-                      </text>
-                    )}
-                  </g>
-                ))}
-              </g>
-            );
-          })}
-        </svg>
-      </div>
-    </div>
-  );
-};
-
-/**
- * The panel for showing execution progress and output logs, now with result visualization.
- */
 const ExecutionPanel = ({
   logs,
   result,
@@ -488,16 +359,188 @@ const ExecutionPanel = ({
   );
 };
 
-// --- FIX: Create a mock simulator to be used as a fallback if WASM fails to load ---
 const mockSimulator = {
   run_simulation: (jsonPayload) => {
     const payload = JSON.parse(jsonPayload);
     const numQubits = payload.numQubits || 1;
     const numOutcomes = 1 << numQubits;
-    // Return a uniform distribution as a mock result
     const probabilities = Array(numOutcomes).fill(1 / numOutcomes);
     return JSON.stringify({ probabilities });
   },
+};
+
+const GatePalette = ({ onDragStart }) => {
+  const gates = ["H", "X", "CX", "RX"];
+  return (
+    <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700">
+      <h3 className="text-base font-bold text-slate-200 mb-4 border-b border-slate-600 pb-2">
+        Gate Palette
+      </h3>
+      <div className="grid grid-cols-4 gap-2">
+        {gates.map((gate) => (
+          <div
+            key={gate}
+            draggable
+            onDragStart={(e) => onDragStart(e, gate)}
+            className="flex justify-center items-center p-1 cursor-grab active:cursor-grabbing"
+          >
+            <GateIcon gate={gate} />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+const CircuitGrid = ({ circuit, onCircuitUpdate }) => {
+  const numQubits = circuit ? circuit.numQubits : 1;
+  const numMoments = 20;
+  const cellHeight = 64;
+  const cellWidth = 56;
+
+  const moments = useMemo(() => {
+    if (!circuit) return [];
+    const gridMoments = Array(numMoments)
+      .fill(null)
+      .map(() => []);
+    const timeSlots = Array(numQubits).fill(0);
+
+    circuit.gates.forEach((gate) => {
+      const involvedQubits = gate.qubits;
+      if (involvedQubits.length === 0) return;
+
+      const momentIndex = Math.max(
+        0,
+        ...involvedQubits.map((q) => timeSlots[q]),
+      );
+      if (momentIndex >= numMoments) return;
+
+      if (gate.type === "CX" || gate.type === "CNOT") {
+        gridMoments[momentIndex].push({
+          type: "CNOT",
+          control: gate.qubits[0],
+          target: gate.qubits[1],
+        });
+      } else {
+        gridMoments[momentIndex].push({
+          type: gate.type,
+          qubit: gate.qubits[0],
+          args: gate.args,
+        });
+      }
+
+      const endTimeSlot = momentIndex + 1;
+      involvedQubits.forEach((q) => (timeSlots[q] = endTimeSlot));
+    });
+    return gridMoments;
+  }, [circuit]);
+
+  const handleDrop = (e, qubitIndex, momentIndex) => {
+    e.preventDefault();
+    const gateType = e.dataTransfer.getData("gateType");
+    if (!gateType || !circuit) return;
+
+    const newGates = [...circuit.gates];
+
+    if (gateType === "CX") {
+      if (qubitIndex > 0) {
+        newGates.push({
+          type: "CX",
+          args: [`${qubitIndex - 1}`, `${qubitIndex}`],
+          qubits: [qubitIndex - 1, qubitIndex],
+        });
+      }
+    } else {
+      newGates.push({
+        type: gateType,
+        args: [`${qubitIndex}`],
+        qubits: [qubitIndex],
+      });
+    }
+
+    onCircuitUpdate({ ...circuit, gates: newGates });
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+  };
+
+  if (!circuit) {
+    return (
+      <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700 h-full flex flex-col">
+        <h3 className="text-base font-bold text-slate-200 mb-4 border-b border-slate-600 pb-2">
+          Circuit Designer
+        </h3>
+        <div className="text-center text-slate-400 pt-10 flex-grow">
+          <p>Define a circuit in the editor to enable the designer.</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700 h-full flex flex-col">
+      <h3 className="text-base font-bold text-slate-200 mb-4 border-b border-slate-600 pb-2">
+        Circuit Designer:{" "}
+        <span className="font-mono text-indigo-300">{circuit.name}</span>
+      </h3>
+      <div className="overflow-auto">
+        <div
+          className="relative inline-block"
+          style={{ minWidth: `${numMoments * cellWidth}px` }}
+        >
+          {Array.from({ length: numQubits }).map((_, qIndex) => (
+            <div
+              key={`line-${qIndex}`}
+              className="absolute h-0.5 bg-gray-500"
+              style={{
+                top: `${qIndex * cellHeight + 31.5}px`,
+                left: "16px",
+                right: "16px",
+                zIndex: 0,
+              }}
+            />
+          ))}
+          <div
+            className="relative z-10 grid"
+            style={{
+              gridTemplateColumns: `repeat(${numMoments}, ${cellWidth}px)`,
+              gridTemplateRows: `repeat(${numQubits}, ${cellHeight}px)`,
+            }}
+          >
+            {Array.from({ length: numQubits * numMoments }).map((_, i) => {
+              const q = Math.floor(i / numMoments);
+              const m = i % numMoments;
+              const momentGates = moments[m] || [];
+              const singleGate = momentGates.find((g) => g.qubit === q);
+              const cnotGate = momentGates.find(
+                (g) => g.type === "CNOT" && (g.control === q || g.target === q),
+              );
+              let gateComponent = null;
+
+              if (singleGate) {
+                gateComponent = <GateIcon gate={singleGate.type} />;
+              } else if (cnotGate) {
+                if (cnotGate.control === q) gateComponent = <CnotControl />;
+                else gateComponent = <CnotTarget />;
+              }
+
+              return (
+                <div
+                  key={`${q}-${m}`}
+                  onDrop={(e) => handleDrop(e, q, m)}
+                  onDragOver={handleDragOver}
+                  className="w-full h-full flex items-center justify-center border-r border-dashed border-slate-700/50"
+                >
+                  {gateComponent}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 };
 
 /**
@@ -506,21 +549,19 @@ const mockSimulator = {
 const QclIdePage = () => {
   const initialCode = `
 ; Welcome to the Visual QCL IDE!
-; This IDE now uses a real WASM-based quantum simulator.
+; This example demonstrates a VQE-like optimization loop.
+; Press "Run" to watch 'theta' update automatically.
 
-; 1. Define classical parameters.
 (defparam 'theta 1.57)
-(defparam 'phi 3.14)
 
-; 2. Define a quantum circuit.
-(defcircuit 'bell_state (
-    (H 0)
-    (CX 0 1)
+(defcircuit 'vqe_ansatz (
+    (RX 'theta 0)
 ))
 
-; 3. Run the circuit on the simulator.
-; The output panel will show the final state probabilities.
-(run 'bell_state)
+(loop 20 (
+    (let 'theta) ; In a real scenario, an optimizer would update this.
+    (run 'vqe_ansatz)
+))
     `.trim();
 
   const [code, setCode] = useState(initialCode);
@@ -532,10 +573,11 @@ const QclIdePage = () => {
 
   const [wasm, setWasm] = useState(null);
   const [isMockMode, setIsMockMode] = useState(false);
+  const loopIntervalRef = useRef(null);
+  const thetaRef = useRef(0);
 
-  const debouncedCode = useDebounce(code, 300);
+  const debouncedCode = useDebounce(code, 500);
 
-  // --- CORRECTED: Effect to load the WASM module with a graceful fallback ---
   useEffect(() => {
     const loadAndInitializeWasm = async () => {
       try {
@@ -546,15 +588,12 @@ const QclIdePage = () => {
       } catch (err) {
         console.error("Error loading and initializing WASM module:", err);
         setIsMockMode(true);
-        // Do not add a scary error to the logs, the UI will indicate mock mode.
         setLogs([]);
       }
     };
-
     loadAndInitializeWasm();
   }, []);
 
-  // Effect for parsing code and updating UI panels
   useEffect(() => {
     const newParams = parseParameters(debouncedCode);
     setParams(newParams);
@@ -562,36 +601,36 @@ const QclIdePage = () => {
     setCircuit(newCircuit);
   }, [debouncedCode]);
 
-  // Handler for UI -> Code binding
-  const handleParamChange = (name, newValue) => {
-    setParams((prev) => ({ ...prev, [name]: newValue }));
-    const regex = new RegExp(`(\\(defparam\\s+'${name}'\\s+)([0-9.-]+)(\\))`);
-    const newCode = code.replace(regex, `$1${newValue.toFixed(2)}$3`);
+  const handleCircuitUpdateFromGrid = (updatedCircuit) => {
+    setCircuit(updatedCircuit);
+
+    const gatesString = updatedCircuit.gates
+      .map((gate) => {
+        return `    (${gate.type} ${gate.args.join(" ")})`;
+      })
+      .join("\n");
+
+    const newCode = code.replace(
+      /\(defcircuit\s+'([a-zA-Z0-9_-]+)\s+\([\s\S]*?\)\)/,
+      `(defcircuit '${updatedCircuit.name} (\n${gatesString}\n))`,
+    );
     setCode(newCode);
   };
 
-  // --- UPDATED: Real execution logic with fallback ---
-  const handleRun = () => {
-    if (isRunning || !circuit) {
-      if (!circuit)
-        setLogs((prev) => [
-          ...prev,
-          '<span class="text-red-400">> No valid circuit defined to run.</span>',
-        ]);
-      return;
-    }
+  const updateParameterValue = (paramName, value) => {
+    setParams((prev) => ({ ...prev, [paramName]: value }));
+    setCode((currentCode) => {
+      const regex = new RegExp(
+        `(\\(defparam\\s+'${paramName}'\\s+)([0-9.-]+)(\\))`,
+      );
+      return currentCode.replace(regex, `$1${value.toFixed(2)}$3`);
+    });
+  };
 
-    setIsRunning(true);
-    setSimResult(null);
-
-    // Use the real WASM module if loaded, otherwise use the mock simulator
+  const runSingleSimulation = (currentParams) => {
     const simulator = wasm || mockSimulator;
+    if (!circuit) return;
 
-    setLogs([
-      `<span class="text-yellow-400">[Workflow]</span> Starting simulation...`,
-    ]);
-
-    // Translate our parsed circuit into the format the WASM simulator expects.
     const timeSlots = Array(circuit.numQubits).fill(0);
     const moments = [];
 
@@ -599,7 +638,9 @@ const QclIdePage = () => {
       const resolvedArgs = gate.args.map((arg) => {
         if (arg.startsWith("'")) {
           const paramName = arg.substring(1);
-          return params[paramName] !== undefined ? params[paramName] : 0;
+          return currentParams[paramName] !== undefined
+            ? currentParams[paramName]
+            : 0;
         }
         return isNaN(parseFloat(arg)) ? arg : parseFloat(arg);
       });
@@ -612,7 +653,6 @@ const QclIdePage = () => {
       }
 
       let simGate;
-      // --- FIX: Handle CX gate from parser and map to CNOT for the simulator ---
       if (gate.type === "CX" || gate.type === "CNOT") {
         simGate = {
           type: "CNOT",
@@ -621,7 +661,7 @@ const QclIdePage = () => {
         };
       } else if (["RX", "RY", "RZ"].includes(gate.type)) {
         simGate = {
-          type: "gate.type",
+          type: gate.type,
           qubit: gateQubits[0],
           theta: resolvedArgs.find((a) => typeof a === "number"),
         };
@@ -639,44 +679,99 @@ const QclIdePage = () => {
       moments: moments.filter((m) => m.length > 0),
     };
 
-    setTimeout(() => {
-      try {
-        const resultJson = simulator.run_simulation(
-          JSON.stringify(circuitPayload),
-        );
-        const result = JSON.parse(resultJson);
+    try {
+      const resultJson = simulator.run_simulation(
+        JSON.stringify(circuitPayload),
+      );
+      return JSON.parse(resultJson);
+    } catch (e) {
+      console.error("Error running simulation:", e);
+      return { error: e.message };
+    }
+  };
+
+  const handleRun = () => {
+    if (isRunning || !circuit) return;
+
+    const loopMatch = code.match(/\(loop\s+([0-9]+)/);
+
+    if (loopMatch) {
+      const iterations = parseInt(loopMatch[1], 10);
+      let currentIteration = 0;
+
+      thetaRef.current = params.theta;
+
+      setIsRunning(true);
+      setLogs([
+        `<span class="text-yellow-400">[Workflow]</span> Starting loop for ${iterations} iterations...`,
+      ]);
+
+      loopIntervalRef.current = setInterval(() => {
+        if (currentIteration >= iterations) {
+          handleStop();
+          return;
+        }
+
+        const result = runSingleSimulation({
+          ...params,
+          theta: thetaRef.current,
+        });
+        setSimResult(result);
+
+        const energy = result.probabilities
+          ? (result.probabilities[0] || 0) - (result.probabilities[1] || 0)
+          : 1;
+        const gradient = -Math.sin(thetaRef.current);
+        const newTheta = thetaRef.current - 0.4 * gradient;
+
+        setLogs((prev) => [
+          ...prev,
+          `[Iter ${currentIteration + 1}/${iterations}] Energy: ${energy.toFixed(3)}, New Theta: ${newTheta.toFixed(3)}`,
+        ]);
+
+        updateParameterValue("theta", newTheta);
+        thetaRef.current = newTheta;
+        currentIteration++;
+      }, 700);
+    } else {
+      setIsRunning(true);
+      setSimResult(null);
+      setLogs([
+        `<span class="text-yellow-400">[Workflow]</span> Starting single simulation...`,
+      ]);
+      setTimeout(() => {
+        const result = runSingleSimulation(params);
         setSimResult(result);
         setLogs((prev) => [
           ...prev,
           `<span class="text-green-400">[Workflow]</span> Simulation finished.`,
         ]);
-      } catch (e) {
-        console.error("Error running simulation:", e);
-        setSimResult({ error: e.message });
-      } finally {
         setIsRunning(false);
-      }
-    }, 100);
+      }, 100);
+    }
   };
 
   const handleStop = () => {
+    if (loopIntervalRef.current) {
+      clearInterval(loopIntervalRef.current);
+      loopIntervalRef.current = null;
+    }
     setIsRunning(false);
+    setLogs((prev) => [
+      ...prev,
+      `<span class="text-yellow-400">[Workflow]</span> Loop finished or stopped.`,
+    ]);
+  };
+
+  const handleDragStart = (e, gateType) => {
+    e.dataTransfer.setData("gateType", gateType);
   };
 
   return (
     <div className="p-4 h-full flex gap-4">
-      <div className="w-3/5 h-full">
-        <QclCodeEditor code={code} setCode={setCode} />
-      </div>
-      <div className="w-2/5 h-full flex flex-col gap-4">
+      <div className="w-3/5 h-full flex flex-col gap-4">
         <div className="flex-1 min-h-0">
-          <ParameterDashboard
-            params={params}
-            onParamChange={handleParamChange}
-          />
-        </div>
-        <div className="flex-1 min-h-0">
-          <QuantumCircuitVisualizer circuit={circuit} />
+          <QclCodeEditor code={code} setCode={setCode} />
         </div>
         <div className="flex-1 min-h-0">
           <ExecutionPanel
@@ -686,6 +781,23 @@ const QclIdePage = () => {
             onStop={handleStop}
             isRunning={isRunning}
             isMockMode={isMockMode}
+          />
+        </div>
+      </div>
+      <div className="w-2/5 h-full flex flex-col gap-4">
+        <div className="flex-1 min-h-0">
+          <CircuitGrid
+            circuit={circuit}
+            onCircuitUpdate={handleCircuitUpdateFromGrid}
+          />
+        </div>
+        <div>
+          <GatePalette onDragStart={handleDragStart} />
+        </div>
+        <div className="flex-1 min-h-0">
+          <ParameterDashboard
+            params={params}
+            onParamChange={updateParameterValue}
           />
         </div>
       </div>
