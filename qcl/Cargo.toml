@@ -6,11 +6,4 @@ edition = "2024"
 [dependencies]
 chumsky = "0.10.1"
 
-# For beautiful, human-readable error reporting
-ariadne = "0.4.0"
-
-# For cross-platform terminal colors in error reports
-yansi = "1.0.0"
-
 qsim = { path = "../qsim" }
-qflow-types = { path = "../qflow-types" }

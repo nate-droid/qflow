@@ -139,8 +139,15 @@ impl StateVector {
 
     // fidelity = |⟨ψ|φ⟩|²
     pub fn fidelity(&self, other: &StateVector) -> f64 {
-        assert_eq!(self.amplitudes.len(), other.amplitudes.len(), "StateVectors must have the same dimension");
-        let inner_product: Complex<f64> = self.amplitudes.iter().zip(&other.amplitudes)
+        assert_eq!(
+            self.amplitudes.len(),
+            other.amplitudes.len(),
+            "StateVectors must have the same dimension"
+        );
+        let inner_product: Complex<f64> = self
+            .amplitudes
+            .iter()
+            .zip(&other.amplitudes)
             .map(|(a, b)| a.conj() * b)
             .sum();
         inner_product.norm_sqr()

@@ -72,7 +72,10 @@ fn parse_circuit(circuit_str: &str) -> Result<Vec<qsim::Gate>, String> {
                         clean_line
                     ));
                 }
-                gates.push(Gate::CX{control: 0, target: 1});
+                gates.push(Gate::CX {
+                    control: 0,
+                    target: 1,
+                });
             }
             "rz" => {
                 if qubit_indices.len() != 1 {
@@ -83,7 +86,10 @@ fn parse_circuit(circuit_str: &str) -> Result<Vec<qsim::Gate>, String> {
                     ));
                 }
                 if let Some(param) = parameter {
-                    gates.push(Gate::RZ{qubit: qubit_indices[0], theta: param});
+                    gates.push(Gate::RZ {
+                        qubit: qubit_indices[0],
+                        theta: param,
+                    });
                 } else {
                     return Err(format!(
                         "Rz gate requires a parameter, found none in '{}'",
@@ -99,7 +105,9 @@ fn parse_circuit(circuit_str: &str) -> Result<Vec<qsim::Gate>, String> {
                         clean_line
                     ));
                 }
-                gates.push(Gate::H{qubit: qubit_indices[0]});
+                gates.push(Gate::H {
+                    qubit: qubit_indices[0],
+                });
             }
             _ => {
                 // For single-qubit gates like h, rz, etc.
@@ -318,7 +326,7 @@ mod tests {
         let qasm = "h q[0];";
         let gates = parse_circuit(qasm).unwrap();
         assert_eq!(gates.len(), 1);
-        assert_eq!(gates[0], Gate::H{qubit: 0});
+        assert_eq!(gates[0], Gate::H { qubit: 0 });
     }
 
     #[test]
@@ -326,7 +334,13 @@ mod tests {
         let qasm = "rz(1.57) q[1];";
         let gates = parse_circuit(qasm).unwrap();
         assert_eq!(gates.len(), 1);
-        assert_eq!(gates[0], Gate::RZ{qubit: 1, theta: 1.57});
+        assert_eq!(
+            gates[0],
+            Gate::RZ {
+                qubit: 1,
+                theta: 1.57
+            }
+        );
     }
 
     #[test]
@@ -334,7 +348,13 @@ mod tests {
         let qasm = "cx q[0], q[1];";
         let gates = parse_circuit(qasm).unwrap();
         assert_eq!(gates.len(), 1);
-        assert_eq!(gates[0], Gate::CX{control: 0, target: 1});
+        assert_eq!(
+            gates[0],
+            Gate::CX {
+                control: 0,
+                target: 1
+            }
+        );
     }
 
     #[test]

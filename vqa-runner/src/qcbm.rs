@@ -247,13 +247,22 @@ mod tests {
     use qsim::QuantumSimulator;
 
     fn simple_ry_ansatz(sim: &mut impl Simulator, params: &[f64]) {
-        sim.apply_gate(&Gate::RY{qubit: 0, theta: params[0]});
+        sim.apply_gate(&Gate::RY {
+            qubit: 0,
+            theta: params[0],
+        });
     }
 
     fn entangling_ansatz(sim: &mut impl Simulator, params: &[f64]) {
-        sim.apply_gate(&Gate::RY{qubit: 0, theta: params[0]});
-        sim.apply_gate(&Gate::H{qubit: 0});
-        sim.apply_gate(&Gate::CX{control: 0, target: 1});
+        sim.apply_gate(&Gate::RY {
+            qubit: 0,
+            theta: params[0],
+        });
+        sim.apply_gate(&Gate::H { qubit: 0 });
+        sim.apply_gate(&Gate::CX {
+            control: 0,
+            target: 1,
+        });
     }
 
     #[test]

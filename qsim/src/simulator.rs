@@ -38,11 +38,13 @@ impl Simulator for QuantumSimulator {
     }
     fn apply_gate(&mut self, gate: &Gate) {
         match gate {
-            Gate::H{qubit} => self.state.apply_single_qubit_gate(&HADAMARD, *qubit),
-            Gate::X{qubit} => self.state.apply_single_qubit_gate(&PAULI_X, *qubit),
-            Gate::Y{qubit} => self.state.apply_single_qubit_gate(&PAULI_Y, *qubit),
-            Gate::Z{qubit} => self.state.apply_single_qubit_gate(&PAULI_Z, *qubit),
-            Gate::CX {control, target} | Gate::CNOT {control, target} => self.state.apply_cx(*control, *target),
+            Gate::H { qubit } => self.state.apply_single_qubit_gate(&HADAMARD, *qubit),
+            Gate::X { qubit } => self.state.apply_single_qubit_gate(&PAULI_X, *qubit),
+            Gate::Y { qubit } => self.state.apply_single_qubit_gate(&PAULI_Y, *qubit),
+            Gate::Z { qubit } => self.state.apply_single_qubit_gate(&PAULI_Z, *qubit),
+            Gate::CX { control, target } | Gate::CNOT { control, target } => {
+                self.state.apply_cx(*control, *target)
+            }
             Gate::Measure => {
                 let result = self.state.measure_all(&mut rand::thread_rng());
             }
@@ -73,9 +75,9 @@ impl Simulator for QuantumSimulator {
         // Apply the Pauli string operator to the state
         for op in &operators {
             match op {
-                Gate::X{qubit} => self.state.apply_single_qubit_gate(&PAULI_X, *qubit),
-                Gate::Y{qubit} => self.state.apply_single_qubit_gate(&PAULI_Y, *qubit),
-                Gate::Z{qubit} => self.state.apply_single_qubit_gate(&PAULI_Z, *qubit),
+                Gate::X { qubit } => self.state.apply_single_qubit_gate(&PAULI_X, *qubit),
+                Gate::Y { qubit } => self.state.apply_single_qubit_gate(&PAULI_Y, *qubit),
+                Gate::Z { qubit } => self.state.apply_single_qubit_gate(&PAULI_Z, *qubit),
                 _ => panic!("Unsupported operator in Pauli string expectation"),
             }
         }
@@ -148,24 +150,33 @@ impl QuantumSimulator {
     }
 
     fn parse_pauli_term(&self, term_str: &str) -> Result<Vec<Gate>, String> {
-        term_str.split_whitespace().map(|pauli_op| {
-            let op_char = pauli_op.chars().next()
-                .ok_or_else(|| "Empty Pauli operator in string".to_string())?;
-            let qubit_idx = pauli_op[1..].parse::<usize>()
-                .map_err(|_| format!("Invalid qubit index in '{}'", pauli_op))?;
+        term_str
+            .split_whitespace()
+            .map(|pauli_op| {
+                let op_char = pauli_op
+                    .chars()
+                    .next()
+                    .ok_or_else(|| "Empty Pauli operator in string".to_string())?;
+                let qubit_idx = pauli_op[1..]
+                    .parse::<usize>()
+                    .map_err(|_| format!("Invalid qubit index in '{}'", pauli_op))?;
 
-            if qubit_idx >= self.num_qubits as usize {
-                return Err(format!("Qubit index {} is out of bounds for {} qubits.", qubit_idx, self.num_qubits));
-            }
+                if qubit_idx >= self.num_qubits as usize {
+                    return Err(format!(
+                        "Qubit index {} is out of bounds for {} qubits.",
+                        qubit_idx, self.num_qubits
+                    ));
+                }
 
-            match op_char {
-                'X' => Ok(Gate::X{qubit: qubit_idx}),
-                'Y' => Ok(Gate::Y{qubit: qubit_idx}),
-                'Z' => Ok(Gate::Z{qubit: qubit_idx}),
-                'I' => Ok(Gate::I{qubit: qubit_idx}),
-                _ => Err(format!("Unknown Pauli operator '{}'", op_char)),
-            }
-        }).collect()
+                match op_char {
+                    'X' => Ok(Gate::X { qubit: qubit_idx }),
+                    'Y' => Ok(Gate::Y { qubit: qubit_idx }),
+                    'Z' => Ok(Gate::Z { qubit: qubit_idx }),
+                    'I' => Ok(Gate::I { qubit: qubit_idx }),
+                    _ => Err(format!("Unknown Pauli operator '{}'", op_char)),
+                }
+            })
+            .collect()
     }
 
     pub fn measure_expectation(&self, operator_string: &str, shots: usize) -> Result<f64, String> {
@@ -193,12 +204,18 @@ impl QuantumSimulator {
                 // For X and Y, the eigenvalue depends on the superposition, but for the
                 // basis states, we can define a consistent (though simplified) mapping.
                 let eigenvalue = match pauli {
-                    Gate::Z{..} => if bit == 0 { 1.0 } else { -1.0 },
+                    Gate::Z { .. } => {
+                        if bit == 0 {
+                            1.0
+                        } else {
+                            -1.0
+                        }
+                    }
                     // For a real simulation, X and Y measurements require basis changes before measuring.
                     // Here we provide a placeholder result.
-                    Gate::X{..} => 1.0,
-                    Gate::Y{..} => 1.0,
-                    Gate::I{..} => 1.0,
+                    Gate::X { .. } => 1.0,
+                    Gate::Y { .. } => 1.0,
+                    Gate::I { .. } => 1.0,
                     _ => return Err(format!("Unsupported Pauli operator: {:?}", pauli)),
                 };
                 shot_eigenvalue *= eigenvalue;
@@ -242,7 +259,7 @@ pub const PAULI_Z: GateMatrix = [
 
 pub fn construct_gate_matrix(gate: &Gate) -> Option<GateMatrix> {
     match gate {
-        Gate::RX{qubit, theta} => Some([
+        Gate::RX { qubit, theta } => Some([
             [
                 Complex::new((theta / 2.0).cos(), 0.0),
                 Complex::new(0.0, -(theta / 2.0).sin()),
@@ -252,7 +269,7 @@ pub fn construct_gate_matrix(gate: &Gate) -> Option<GateMatrix> {
                 Complex::new((theta / 2.0).cos(), 0.0),
             ],
         ]),
-        Gate::RY{qubit, theta} => Some([
+        Gate::RY { qubit, theta } => Some([
             [
                 Complex::new((theta / 2.0).cos(), 0.0),
                 Complex::new(0.0, -(theta / 2.0).sin()),
@@ -262,7 +279,7 @@ pub fn construct_gate_matrix(gate: &Gate) -> Option<GateMatrix> {
                 Complex::new((theta / 2.0).cos(), 0.0),
             ],
         ]),
-        Gate::RZ{qubit, theta} => Some([
+        Gate::RZ { qubit, theta } => Some([
             [
                 Complex::new((theta / 2.0).cos(), -(theta / 2.0).sin()),
                 Complex::new(0.0, 0.0),
@@ -299,11 +316,13 @@ pub fn run_simulation(qasm_input: &str) -> Option<Vec<Event>> {
     for (i, gate) in gates.iter().enumerate() {
         let gate_str = format!("{:?}", gate);
         match gate {
-            Gate::H{qubit} => state.apply_single_qubit_gate(&HADAMARD, *qubit),
-            Gate::X{qubit} => state.apply_single_qubit_gate(&PAULI_X, *qubit),
-            Gate::Y{qubit} => state.apply_single_qubit_gate(&PAULI_Y, *qubit),
-            Gate::Z{qubit} => state.apply_single_qubit_gate(&PAULI_Z, *qubit),
-            Gate::CX{control, target} | Gate::CNOT {control, target} => state.apply_cx(*control, *target),
+            Gate::H { qubit } => state.apply_single_qubit_gate(&HADAMARD, *qubit),
+            Gate::X { qubit } => state.apply_single_qubit_gate(&PAULI_X, *qubit),
+            Gate::Y { qubit } => state.apply_single_qubit_gate(&PAULI_Y, *qubit),
+            Gate::Z { qubit } => state.apply_single_qubit_gate(&PAULI_Z, *qubit),
+            Gate::CX { control, target } | Gate::CNOT { control, target } => {
+                state.apply_cx(*control, *target)
+            }
             Gate::Measure => {
                 let result = state.measure_all(&mut rng);
 

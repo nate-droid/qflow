@@ -1,9 +1,9 @@
-use wasm_bindgen::prelude::*;
-use serde::{Deserialize, Serialize};
 use num_complex::Complex;
-use qsim::circuit::{circuit_to_qasm, Circuit};
-use qsim::{Gate, QuantumSimulator};
+use qsim::circuit::{Circuit, circuit_to_qasm};
 use qsim::simulator::Simulator;
+use qsim::{Gate, QuantumSimulator};
+use serde::{Deserialize, Serialize};
+use wasm_bindgen::prelude::*;
 
 // This allows Rust to log to the browser's developer console.
 #[wasm_bindgen]
@@ -46,7 +46,6 @@ struct SimulationResult {
     probabilities: Vec<f64>,
 }
 
-
 // --- Core Simulation Logic ---
 
 /// The main simulation engine.
@@ -73,7 +72,7 @@ fn run_simulation_engine(circuit: Circuit) -> SimulationResult {
     let probabilities: Vec<f64> = sim.get_statevector().iter().map(|c| c.norm_sqr()).collect();
 
     // Convert complex numbers to a serializable tuple format (real, imag).
-    let serializable_state_vector =  sim.get_statevector().iter().map(|c| (c.re, c.im)).collect();
+    let serializable_state_vector = sim.get_statevector().iter().map(|c| (c.re, c.im)).collect();
 
     SimulationResult {
         state_vector: serializable_state_vector,
@@ -82,7 +81,12 @@ fn run_simulation_engine(circuit: Circuit) -> SimulationResult {
 }
 
 /// Applies a generic 2x2 matrix to a specific qubit.
-fn apply_single_qubit_gate(state_vector: &mut Vec<Complex<f64>>, qubit: usize, matrix: &[[Complex<f64>; 2]; 2], num_qubits: usize) {
+fn apply_single_qubit_gate(
+    state_vector: &mut Vec<Complex<f64>>,
+    qubit: usize,
+    matrix: &[[Complex<f64>; 2]; 2],
+    num_qubits: usize,
+) {
     let stride = 1 << qubit;
     let num_states = 1 << num_qubits;
 
@@ -102,7 +106,12 @@ fn apply_single_qubit_gate(state_vector: &mut Vec<Complex<f64>>, qubit: usize, m
 }
 
 /// Applies the CNOT gate.
-fn apply_cnot(state_vector: &mut Vec<Complex<f64>>, control: usize, target: usize, num_qubits: usize) {
+fn apply_cnot(
+    state_vector: &mut Vec<Complex<f64>>,
+    control: usize,
+    target: usize,
+    num_qubits: usize,
+) {
     let num_states = 1 << num_qubits;
     for i in 0..num_states {
         // Check if the control bit is 1.
@@ -110,7 +119,7 @@ fn apply_cnot(state_vector: &mut Vec<Complex<f64>>, control: usize, target: usiz
             // If control is 1, flip the target bit. This means swapping amplitudes.
             let target_mask = 1 << target;
             let i0 = i & !target_mask; // State where target is 0
-            let i1 = i | target_mask;  // State where target is 1
+            let i1 = i | target_mask; // State where target is 1
 
             // We only need to swap once, so we only do it when i corresponds to the state
             // where the target bit is 0.
@@ -125,8 +134,26 @@ fn apply_cnot(state_vector: &mut Vec<Complex<f64>>, control: usize, target: usiz
 struct GateMatrix;
 impl GateMatrix {
     const H: [[Complex<f64>; 2]; 2] = [
-        [Complex { re: 0.70710678, im: 0.0 }, Complex { re: 0.70710678, im: 0.0 }],
-        [Complex { re: 0.70710678, im: 0.0 }, Complex { re: -0.70710678, im: 0.0 }],
+        [
+            Complex {
+                re: 0.70710678,
+                im: 0.0,
+            },
+            Complex {
+                re: 0.70710678,
+                im: 0.0,
+            },
+        ],
+        [
+            Complex {
+                re: 0.70710678,
+                im: 0.0,
+            },
+            Complex {
+                re: -0.70710678,
+                im: 0.0,
+            },
+        ],
     ];
     const X: [[Complex<f64>; 2]; 2] = [
         [Complex { re: 0.0, im: 0.0 }, Complex { re: 1.0, im: 0.0 }],
@@ -142,7 +169,6 @@ impl GateMatrix {
     ];
 }
 
-
 // --- WASM Export ---
 
 /// The public function that will be callable from JavaScript.
@@ -156,7 +182,8 @@ pub fn run_simulation(circuit_json: &str) -> String {
         Err(e) => {
             error(&format!("Error deserializing circuit: {}", e));
             // Return a JSON object indicating the error.
-            return serde_json::json!({ "error": format!("Failed to parse circuit: {}", e) }).to_string();
+            return serde_json::json!({ "error": format!("Failed to parse circuit: {}", e) })
+                .to_string();
         }
     };
 
@@ -170,7 +197,6 @@ pub fn run_simulation(circuit_json: &str) -> String {
     })
 }
 
-
 #[wasm_bindgen]
 pub fn compile_circuit_to_qasm(circuit_json: &str) -> String {
     // Deserialize the input string into our Rust `Circuit` struct.
@@ -179,7 +205,8 @@ pub fn compile_circuit_to_qasm(circuit_json: &str) -> String {
         Err(e) => {
             error(&format!("Error deserializing circuit: {}", e));
             // Return a JSON object indicating the error.
-            return serde_json::json!({ "error": format!("Failed to parse circuit: {}", e) }).to_string();
+            return serde_json::json!({ "error": format!("Failed to parse circuit: {}", e) })
+                .to_string();
         }
     };
 

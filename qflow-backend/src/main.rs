@@ -390,8 +390,7 @@ async fn submit_qasm(
     };
 
     // Submit to Kubernetes
-    let wf_api: Api<QuantumWorkflow> =
-        Api::namespaced(state.client.clone(), &namespace);
+    let wf_api: Api<QuantumWorkflow> = Api::namespaced(state.client.clone(), &namespace);
 
     match wf_api
         .create(&PostParams::default(), &quantum_workflow)

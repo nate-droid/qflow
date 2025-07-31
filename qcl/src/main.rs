@@ -32,9 +32,7 @@ fn main() {
     // We can check for errors and print them...
     if result.has_errors() {
         println!("--- Parsing Failed ---");
-        result
-            .errors()
-            .for_each(|e| println!("Error: {}", e));
+        result.errors().for_each(|e| println!("Error: {}", e));
     }
 
     // ...and we can get the output if parsing was successful.
@@ -46,12 +44,12 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    use super::parser::{qcl_parser, validate_ast, Declaration, Gate, Value};
+    use super::parser::{Declaration, Gate, Value, qcl_parser, validate_ast};
+    use crate::parser;
+    use crate::workflow::Workflow;
     use chumsky::Parser;
     use std::collections::HashMap;
     use std::fs;
-    use crate::parser;
-    use crate::workflow::Workflow;
 
     /// Pre-processes the QCL code to remove comments and normalize whitespace.
     fn preprocess_qcl(code: &str) -> String {
@@ -139,7 +137,10 @@ mod tests {
         // The pre-processor will clean the code, so the parser will receive `(defparam 'alpha)`.
         // This is syntactically valid, but semantically invalid.
         let validation_result = run_parser_and_validate(qcl_code);
-        assert!(validation_result.is_err(), "Validator should have failed but didn't");
+        assert!(
+            validation_result.is_err(),
+            "Validator should have failed but didn't"
+        );
 
         // Check for the expected error message
         let error_message = validation_result.err().unwrap();

@@ -12,10 +12,10 @@ pub enum Pauli {
 
 fn pauli_to_gate(pauli: Pauli) -> Gate {
     match pauli {
-        Pauli::I => Gate::I{qubit: 0},
-        Pauli::X => Gate::X{qubit: 0},
-        Pauli::Y => Gate::Y{qubit: 0},
-        Pauli::Z => Gate::Z{qubit: 0},
+        Pauli::I => Gate::I { qubit: 0 },
+        Pauli::X => Gate::X { qubit: 0 },
+        Pauli::Y => Gate::Y { qubit: 0 },
+        Pauli::Z => Gate::Z { qubit: 0 },
     }
 }
 

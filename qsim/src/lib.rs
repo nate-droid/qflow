@@ -22,7 +22,10 @@ mod tests {
         let mut simulator = QuantumSimulator::new(1);
         let mut circuit = Circuit::new();
 
-        circuit.add_gate(Gate::RY{qubit: 0, theta: PI});
+        circuit.add_gate(Gate::RY {
+            qubit: 0,
+            theta: PI,
+        });
 
         simulator.apply_circuit(&circuit);
 
