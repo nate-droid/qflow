@@ -9,19 +9,14 @@ import { Routes, Route, NavLink, Outlet, useNavigate } from "react-router-dom";
 import cytoscape from "cytoscape";
 import cytoscapeDagre from "cytoscape-dagre";
 
-// NOTE: The 'cytoscape-dagre' library is expected to be loaded globally in this environment.
-// The direct import is removed to resolve a build error where the module cannot be found.
-// The registration of the dagre layout is assumed to be handled by the global script.
-// Make sure to run: npm install cytoscape dagre d3
-
 cytoscape.use(cytoscapeDagre);
 
 import VisualizerPage from "./pages/VisualizerPage";
 import CircuitSimulatorPage from "./pages/CircuitSimulatorPage";
-import MlSvmPage from "./pages/MlSvmPage";
+// import MlSvmPage from "./pages/MlSvmPage";
 import QasmSubmitterPage from "./pages/QasmSubmitterPage";
 import QcbmSubmitterPage from "./pages/QcbmSubmitterPage";
-import SvmExperimentPage from "./pages/SvmExperimentPage";
+// import SvmExperimentPage from "./pages/SvmExperimentPage";
 import QclDesigner from "./pages/QclDesignerPage";
 
 //================================================================================
@@ -617,14 +612,6 @@ const AppLayout = () => (
             Visualizer
           </NavLink>
           <NavLink
-            to="/svm"
-            className={({ isActive }) =>
-              `py-2 px-1 md:px-2 nav-link ${isActive ? "active" : ""}`
-            }
-          >
-            SVM Exp
-          </NavLink>
-          <NavLink
             to="/qcbm"
             className={({ isActive }) =>
               `py-2 px-1 md:px-2 nav-link ${isActive ? "active" : ""}`
@@ -639,14 +626,6 @@ const AppLayout = () => (
             }
           >
             Submit QASM
-          </NavLink>
-          <NavLink
-            to="/ml-svm"
-            className={({ isActive }) =>
-              `py-2 px-1 md:px-2 nav-link ${isActive ? "active" : ""}`
-            }
-          >
-            ML SVM
           </NavLink>
           <NavLink
             to="/simulator"
@@ -695,10 +674,8 @@ export default function App() {
           <Route path="/" element={<AppLayout />}>
             <Route index element={<VisualizerPage />} />
             <Route path="visualizer" element={<VisualizerPage />} />
-            <Route path="svm" element={<SvmExperimentPage />} />
             <Route path="qcbm" element={<QcbmSubmitterPage />} />
             <Route path="qasm" element={<QasmSubmitterPage />} />
-            <Route path="ml-svm" element={<MlSvmPage />} />
             <Route path="simulator" element={<CircuitSimulatorPage />} />
             <Route path="qcl" element={<QclDesigner />} />
           </Route>
