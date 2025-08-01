@@ -8,6 +8,7 @@ use rustyline::error::ReadlineError;
 use rustyline::highlight::Highlighter;
 use rustyline::hint::Hinter;
 use rustyline::validate::{ValidationContext, ValidationResult, Validator};
+use std::borrow::Cow;
 use std::fs;
 
 /// Pre-processes the QCL code to remove comments and normalize whitespace.
@@ -378,7 +379,151 @@ impl Hinter for QclCompleter {
         None
     }
 }
-impl Highlighter for QclCompleter {}
+impl Highlighter for QclCompleter {
+    fn highlight<'l>(&self, line: &'l str, _pos: usize) -> std::borrow::Cow<'l, str> {
+        use std::borrow::Cow;
+        // ANSI color codes for cyberpunk/carbon style
+        const KEYWORD: &str = "\x1b[38;5;213m"; // pink
+        const SYMBOL: &str = "\x1b[38;5;51m"; // cyan
+        const NUMBER: &str = "\x1b[38;5;226m"; // yellow
+        const COMMENT: &str = "\x1b[38;5;240m"; // gray
+        const PAREN_OK: &str = "\x1b[38;5;48m"; // green
+        const PAREN_BAD: &str = "\x1b[38;5;196m"; // red
+        const RESET: &str = "\x1b[0m";
+
+        let mut out = String::new();
+
+        // First pass: find matching parens
+        let mut stack = Vec::new();
+        let mut matches = Vec::new();
+        let mut unmatched = Vec::new();
+        for (i, c) in line.chars().enumerate() {
+            if c == '(' {
+                stack.push(i);
+            } else if c == ')' {
+                if let Some(open) = stack.pop() {
+                    matches.push((open, i));
+                } else {
+                    unmatched.push(i);
+                }
+            }
+        }
+        // Any remaining on stack are unmatched opens
+        for open in stack {
+            unmatched.push(open);
+        }
+
+        // Second pass: build highlighted output
+        let mut idx = 0;
+        let comment_start = line.find(';');
+        let line_chars: Vec<char> = line.chars().collect();
+
+        while idx < line_chars.len() {
+            let c = line_chars[idx];
+
+            // Highlight comments
+            if let Some(cs) = comment_start {
+                if idx >= cs {
+                    out.push_str(COMMENT);
+                    out.push(c);
+                    idx += 1;
+                    continue;
+                }
+            }
+
+            // Parenthesis highlighting
+            if c == '(' || c == ')' {
+                let mut highlighted = false;
+                for &(open, close) in &matches {
+                    if idx == open || idx == close {
+                        out.push_str(PAREN_OK);
+                        out.push(c);
+                        out.push_str(RESET);
+                        highlighted = true;
+                        break;
+                    }
+                }
+                if !highlighted {
+                    if unmatched.contains(&idx) {
+                        out.push_str(PAREN_BAD);
+                        out.push(c);
+                        out.push_str(RESET);
+                    } else {
+                        out.push(c);
+                    }
+                }
+            }
+            // Highlight numbers
+            else if c.is_ascii_digit()
+                || (c == '.' && idx + 1 < line_chars.len() && line_chars[idx + 1].is_ascii_digit())
+            {
+                let mut num = String::new();
+                num.push(c);
+                let mut j = idx + 1;
+                while j < line_chars.len()
+                    && (line_chars[j].is_ascii_digit() || line_chars[j] == '.')
+                {
+                    num.push(line_chars[j]);
+                    j += 1;
+                }
+                out.push_str(NUMBER);
+                out.push_str(&num);
+                out.push_str(RESET);
+                idx = j - 1;
+            }
+            // Highlight keywords and symbols
+            else if c == '\'' {
+                // Symbol
+                let mut sym = String::new();
+                sym.push(c);
+                let mut j = idx + 1;
+                while j < line_chars.len()
+                    && (line_chars[j].is_alphanumeric() || line_chars[j] == '_')
+                {
+                    sym.push(line_chars[j]);
+                    j += 1;
+                }
+                out.push_str(SYMBOL);
+                out.push_str(&sym);
+                out.push_str(RESET);
+                idx = j - 1;
+            } else if c.is_alphabetic() {
+                // Try to match a keyword
+                let mut word = String::new();
+                word.push(c);
+                let mut j = idx + 1;
+                while j < line_chars.len()
+                    && (line_chars[j].is_alphanumeric()
+                        || line_chars[j] == '-'
+                        || line_chars[j] == '_')
+                {
+                    word.push(line_chars[j]);
+                    j += 1;
+                }
+                if self.keywords.iter().any(|kw| kw == &word) {
+                    out.push_str(KEYWORD);
+                    out.push_str(&word);
+                    out.push_str(RESET);
+                } else {
+                    out.push_str(&word);
+                }
+                idx = j - 1;
+            } else {
+                out.push(c);
+            }
+            idx += 1;
+        }
+        Cow::Owned(out)
+    }
+
+    fn highlight_prompt<'b, 's: 'b, 'p: 'b>(
+        &'s self,
+        prompt: &'p str,
+        _default: bool,
+    ) -> Cow<'b, str> {
+        Cow::Owned(format!("\x1b[38;5;39m{}\x1b[0m", prompt))
+    }
+}
 impl Validator for QclCompleter {
     fn validate(
         &self,
