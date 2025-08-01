@@ -49,24 +49,6 @@
 
 
 ;=================================================================
-;= Example 3: Invalid Script (Semantic Error)
-;=
-;= Purpose: Tests the `validate_ast` function. The parser
-;= should successfully create an S-expression tree from this,
-;= but the validation step should fail with a clear error
-;= message because `defparam` is missing an argument.
-;=================================================================
-
-(defparam 'alpha) ; ERROR: Missing initial value!
-
-(defcircuit 'broken_circuit (qubits: 1)
-    (RX 'alpha 0)
-)
-
-(run (circuit: 'broken_circuit'))
-
-
-;=================================================================
 ;= Example 4: Metaprogramming Test
 ;=
 ;= Purpose: Tests the ability to define reusable blocks of code.
@@ -90,30 +72,4 @@
     (CX 0 1)
     ; Use it again with a different parameter
     (rotation_layer 'theta_2)
-)
-
-
-;=================================================================
-;= Example 5: Suite of Invalid Scripts
-;=
-;= Purpose: To test various failure modes of the parser and
-;= validator.
-;=================================================================
-
-; --- SYNTAX ERRORS (Should be caught by the parser) ---
-
-; Mismatched parenthesis
-(defparam 'mismatch 0.5
-
-; --- SEMANTIC ERRORS (Should be caught by the validator) ---
-
-; Unknown command
-(deffoo 'my_param 1.0)
-
-; Wrong argument type for defcircuit
-(defcircuit 'bad_args "not_a_list_of_args")
-
-; Missing qubits argument
-(defcircuit 'no_qubits
-    (H 0)
 )

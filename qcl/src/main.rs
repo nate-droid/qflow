@@ -1,18 +1,30 @@
 mod parser;
+mod repl;
 mod workflow;
 use crate::parser::qcl_parser;
 use crate::parser::{Declaration, validate_ast};
+use crate::repl::run_repl;
 use crate::workflow::Workflow;
 use chumsky::Parser;
 use std::env;
 use std::fs;
 
+/// Pre-processes the QCL code to remove comments and normalize whitespace.
+fn preprocess_qcl(code: &str) -> String {
+    code.lines()
+        .map(|line| line.split(';').next().unwrap_or("").trim())
+        .filter(|line| !line.is_empty())
+        .collect::<Vec<_>>()
+        .join("")
+}
+
 fn main() {
     // Get the QCL file path from command line arguments
     let args: Vec<String> = env::args().collect();
     if args.len() < 2 {
-        eprintln!("Usage: {} <qcl_file>", args[0]);
-        std::process::exit(1);
+        // No file provided, start REPL
+        run_repl();
+        return;
     }
     let file_path = &args[1];
 
@@ -25,9 +37,13 @@ fn main() {
         }
     };
 
+    // Preprocess to remove comments
+    let cleaned_code = preprocess_qcl(&qcl_code);
+
+    println!("Cleaned QCL code:\n{}", cleaned_code);
     println!("Attempting to parse QCL code from '{}'...\n", file_path);
 
-    let result = qcl_parser().parse(&qcl_code);
+    let result = qcl_parser().parse(&cleaned_code);
 
     if result.has_errors() {
         println!("--- Parsing Failed ---");
