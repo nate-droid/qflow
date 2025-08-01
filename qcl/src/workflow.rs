@@ -118,6 +118,10 @@ impl Workflow {
                     }
                     println!("[Workflow] <<< Exiting Loop");
                 }
+                Declaration::EvalExpr(expr) => match self.evaluate_expr(expr) {
+                    Ok(result) => println!("{}", result),
+                    Err(e) => println!("Error evaluating expression: {}", e),
+                },
             }
         }
         Ok(())

@@ -50,6 +50,7 @@ pub enum Declaration {
         times: u64,
         body: Vec<Declaration>,
     },
+    EvalExpr(Value),
 }
 
 pub fn qcl_parser<'a>()
@@ -335,6 +336,7 @@ fn try_decl_from_value(val: Value, _span: SimpleSpan) -> Result<Declaration, Str
                 body: body_decls,
             })
         }
-        _ => Err(format!("Unknown command '{}'", command)),
+        // If not a known command, treat as EvalExpr for direct evaluation
+        _ => Ok(Declaration::EvalExpr(Value::List(list))),
     }
 }
