@@ -22,6 +22,7 @@ This repo is a Rust Workspace containing several components that work together t
 - **qflow-operator/**: Kubernetes operator managing QFlow custom resources, running quantum jobs, and updating results.
 - **qflowc/**: Compiler for the QFlow DSL. Converts OpenQASM or QFlow DSL files into Kubernetes CRDs for use with the operator.
 - **qsim/**: Standalone quantum circuit simulator. Used by the operator, but can be run independently.
+- **qcl/**: A new crate for defining and running hybrid quantum-classical workflows using a simple, extensible DSL inspired by Lisp. Use this to experiment with variational algorithms, parameterized circuits, and classical control logic in a REPL or scriptable environment.
 
 ## Quickstart
 

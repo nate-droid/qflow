@@ -1,8 +1,10 @@
 use crate::parser::{qcl_parser, validate_ast};
 use crate::workflow::Workflow;
 use chumsky::Parser;
+use rustyline::Editor;
+use rustyline::error::ReadlineError;
 use std::fs;
-use std::io::{self, Write};
+use rustyline::history::FileHistory;
 
 /// Pre-processes the QCL code to remove comments and normalize whitespace.
 fn preprocess_qcl(code: &str) -> String {
@@ -28,17 +30,30 @@ pub fn run_repl() {
     let mut last_code_block: Option<String> = None;
     let mut history: Vec<String> = Vec::new();
 
+    let mut rl = Editor::<(), FileHistory>::new().expect("Failed to create rustyline editor");
+    // Optionally load persistent history from a file
+    rl.load_history("history.txt").ok();
+
     loop {
         let mut input_lines = Vec::new();
-        print!("qcl> ");
-        io::stdout().flush().unwrap();
-
         let mut first_line = String::new();
-        if io::stdin().read_line(&mut first_line).is_err() {
-            println!("Error reading input.");
-            continue;
+
+        match rl.readline("qcl> ") {
+            Ok(line) => {
+                first_line = line.trim().to_string();
+                if !first_line.is_empty() {
+                    rl.add_history_entry(first_line.clone());
+                }
+            }
+            Err(ReadlineError::Interrupted) | Err(ReadlineError::Eof) => {
+                println!("Exiting QCL REPL.");
+                break;
+            }
+            Err(err) => {
+                println!("Error reading input: {:?}", err);
+                continue;
+            }
         }
-        let first_line = first_line.trim();
 
         // Handle REPL commands
         if first_line == ":quit" || first_line == ":exit" {
@@ -50,7 +65,8 @@ pub fn run_repl() {
                 Ok(content) => {
                     println!("Loaded file '{}'. Executing...", file_path);
                     execute_qcl_block(&content, &mut workflow);
-                    last_code_block = Some(content);
+                    last_code_block = Some(content.clone());
+                    history.push(format!(":load {}", file_path));
                 }
                 Err(e) => {
                     println!("Failed to read file '{}': {}", file_path, e);
@@ -70,10 +86,12 @@ pub fn run_repl() {
                 Ok(_) => println!("Saved last code block to '{}'.", file_path),
                 Err(e) => println!("Failed to save file '{}': {}", file_path, e),
             }
+            history.push(format!(":save {}", file_path));
             continue;
         } else if first_line == ":reset" {
             workflow = Workflow::new();
             println!("Workflow state has been reset.");
+            history.push(":reset".to_string());
             continue;
         } else if first_line == ":vars" {
             if workflow.params.is_empty() {
@@ -84,6 +102,7 @@ pub fn run_repl() {
                     println!("  {} = {}", name, value);
                 }
             }
+            history.push(":vars".to_string());
             continue;
         } else if first_line == ":macros" {
             if workflow.macros.is_empty() {
@@ -94,6 +113,7 @@ pub fn run_repl() {
                     println!("  {}({})", name, mac.params.join(", "));
                 }
             }
+            history.push(":macros".to_string());
             continue;
         } else if first_line == ":circuits" {
             if workflow.circuits.is_empty() {
@@ -109,6 +129,7 @@ pub fn run_repl() {
                     );
                 }
             }
+            history.push(":circuits".to_string());
             continue;
         } else if first_line == ":obs" {
             if workflow.observables.is_empty() {
@@ -119,6 +140,7 @@ pub fn run_repl() {
                     println!("  {} = {}", name, obs.operator);
                 }
             }
+            history.push(":obs".to_string());
             continue;
         } else if first_line == ":history" {
             if history.is_empty() {
@@ -128,6 +150,30 @@ pub fn run_repl() {
                 for (i, entry) in history.iter().enumerate() {
                     println!("  [{}] {}", i + 1, entry.replace("\n", " "));
                 }
+            }
+            history.push(":history".to_string());
+            continue;
+        } else if first_line.starts_with(":!") {
+            // Re-execute history item
+            let idx_str = first_line[2..].trim();
+            match idx_str.parse::<usize>() {
+                Ok(idx) if idx > 0 && idx <= history.len() => {
+                    let entry = &history[idx - 1];
+                    println!(
+                        "Re-executing history [{}]: {}",
+                        idx,
+                        entry.replace("\n", " ")
+                    );
+                    // If it's a command, just print it (or you could parse and handle)
+                    // If it's a code block, execute it
+                    if entry.starts_with(":") {
+                        println!("Cannot re-execute command: {}", entry);
+                    } else {
+                        execute_qcl_block(entry, &mut workflow);
+                        last_code_block = Some(entry.clone());
+                    }
+                }
+                _ => println!("Invalid history index."),
             }
             continue;
         } else if first_line == "." {
@@ -139,18 +185,28 @@ pub fn run_repl() {
         if !first_line.is_empty() {
             input_lines.push(first_line.to_string());
             loop {
-                print!("... ");
-                io::stdout().flush().unwrap();
-                let mut next_line = String::new();
-                if io::stdin().read_line(&mut next_line).is_err() {
-                    println!("Error reading input.");
-                    break;
+                match rl.readline("... ") {
+                    Ok(next_line) => {
+                        let next_line = next_line.trim();
+                        if !next_line.is_empty() {
+                            rl.add_history_entry(next_line.to_string());
+                        }
+                        if next_line == "." {
+                            break;
+                        }
+                        input_lines.push(next_line.to_string());
+                    }
+                    Err(ReadlineError::Interrupted) | Err(ReadlineError::Eof) => {
+                        // Optionally save persistent history to a file
+                        rl.save_history("history.txt").ok();
+                        println!("Exiting QCL REPL.");
+                        return;
+                    }
+                    Err(err) => {
+                        println!("Error reading input: {:?}", err);
+                        break;
+                    }
                 }
-                let next_line = next_line.trim();
-                if next_line == "." {
-                    break;
-                }
-                input_lines.push(next_line.to_string());
             }
         } else {
             continue;

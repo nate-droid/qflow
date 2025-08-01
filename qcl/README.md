@@ -1,5 +1,45 @@
 # QCL: The Quantum Composition Language - A Guide
 
+## Quickstart: Basic Syntax
+
+QCL uses S-expressions (Lisp-like parentheses) for all commands. Here are some simple examples:
+
+```lisp
+; Define a parameter
+(defparam 'learning_rate 0.1)
+
+; Define a Bell circuit
+(defcircuit 'bell_state (qubits 2)
+    (H 0)
+    (CX 0 1)
+)
+
+; Define an observable
+(defobs 'simple_obs "Z0")
+
+; Run a workflow
+(run
+    (circuit: 'bell_state)
+    (obs: 'simple_obs)
+)
+
+; Arithmetic and expressions
+(+ 2 2) ; prints 4 in the REPL
+```
+
+## Using the REPL
+
+Start the REPL with:
+```
+cargo run -p qcl
+```
+
+- Enter code directly, or type multi-line blocks (finish with a single `.` on a line).
+- Use commands like `:load <file>`, `:save <file>`, `:vars`, `:macros`, `:circuits`, `:obs`, `:history`, `:reset`, `:quit`.
+- Use arrow keys for history navigation.
+- Re-execute previous code blocks with `:!N` (where N is the history line number).
+
+
 ## Introduction & Philosophy
    
 Welcome to QCL, the Quantum Composition Language. QCL is a simple, powerful language designed specifically for defining and executing hybrid quantum-classical workflows. Its primary goal is to make the process of building and testing variational quantum algorithms intuitive and flexible.
