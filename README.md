@@ -55,6 +55,15 @@ react and an initial WASM implementation of the simulator. This allows the UI to
 ![simulator running in WASM](img.png)
 
 
+It will be a long road to get there, but I have created initial support for a language called QCL (Quantum Control Language)
+that will be used to define hybrid workflows in a hopefully simple and extensible way. The goal is to allow users to
+have an easy way to create training experiments and get feedback in realtime. Here is one of the first working examples 
+I was able to cook up:
+
+![img_1.png](img_1.png)
+
+Like the standard circuit designer, this also uses the WASM simulator to run the experiments directly in the browser.
+
 # Example Results
 
 The following image shows the results of running against the "make_circles" dataset from scikit-learn. You can find out 

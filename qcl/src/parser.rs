@@ -336,7 +336,16 @@ fn try_decl_from_value(val: Value, _span: SimpleSpan) -> Result<Declaration, Str
                 body: body_decls,
             })
         }
-        // If not a known command, treat as EvalExpr for direct evaluation
-        _ => Ok(Declaration::EvalExpr(Value::List(list))),
+        // If not a known command, treat as EvalExpr only for operators, else error
+        _ => {
+            if let Value::Str(ref s) = list[0].0 {
+                // List of allowed operators
+                let operators = ["+", "-", "*", "/"];
+                if !operators.contains(&s.as_str()) {
+                    return Err(format!("Unknown command '{}'", s));
+                }
+            }
+            Ok(Declaration::EvalExpr(Value::List(list)))
+        }
     }
 }
