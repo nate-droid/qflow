@@ -2,9 +2,13 @@ use crate::parser::{qcl_parser, validate_ast};
 use crate::workflow::Workflow;
 use chumsky::Parser;
 use rustyline::Editor;
+use rustyline::Helper;
+use rustyline::completion::{Completer, Pair};
 use rustyline::error::ReadlineError;
+use rustyline::highlight::Highlighter;
+use rustyline::hint::Hinter;
+use rustyline::validate::{ValidationContext, ValidationResult, Validator};
 use std::fs;
-use rustyline::history::FileHistory;
 
 /// Pre-processes the QCL code to remove comments and normalize whitespace.
 fn preprocess_qcl(code: &str) -> String {
@@ -30,8 +34,34 @@ pub fn run_repl() {
     let mut last_code_block: Option<String> = None;
     let mut history: Vec<String> = Vec::new();
 
-    let mut rl = Editor::<(), FileHistory>::new().expect("Failed to create rustyline editor");
-    // Optionally load persistent history from a file
+    // --- Autocomplete setup ---
+    let keywords = vec![
+        "defparam",
+        "defcircuit",
+        "defobs",
+        "run",
+        "let",
+        "write-file",
+        "loop",
+        "def",
+        ":load",
+        ":save",
+        ":vars",
+        ":macros",
+        ":circuits",
+        ":obs",
+        ":history",
+        ":reset",
+        ":quit",
+        ":exit",
+    ]
+    .into_iter()
+    .map(String::from)
+    .collect();
+
+    let completer = QclCompleter { keywords };
+    let mut rl = Editor::new().expect("Failed to create rustyline editor");
+    rl.set_helper(Some(completer));
     rl.load_history("history.txt").ok();
 
     loop {
@@ -171,6 +201,10 @@ pub fn run_repl() {
                     } else {
                         execute_qcl_block(entry, &mut workflow);
                         last_code_block = Some(entry.clone());
+                        // Update completer with new workflow state
+                        if let Some(helper) = rl.helper_mut() {
+                            helper.update_from_workflow(&workflow);
+                        }
                     }
                 }
                 _ => println!("Invalid history index."),
@@ -216,9 +250,12 @@ pub fn run_repl() {
         execute_qcl_block(&block, &mut workflow);
         last_code_block = Some(block.clone());
         history.push(block);
+        // Update completer with new workflow state
+        if let Some(helper) = rl.helper_mut() {
+            helper.update_from_workflow(&workflow);
+        }
     }
 }
-
 /// Executes a block of QCL code in the REPL, printing results/errors.
 fn execute_qcl_block(qcl_code: &str, workflow: &mut Workflow) {
     let cleaned_code = preprocess_qcl(qcl_code);
@@ -262,4 +299,91 @@ fn execute_qcl_block(qcl_code: &str, workflow: &mut Workflow) {
         return;
     }
     println!("--- Workflow Execution Complete ---");
+}
+
+/// Autocomplete helper for QCL REPL
+pub struct QclCompleter {
+    pub keywords: Vec<String>,
+}
+
+impl QclCompleter {
+    /// Update keywords from workflow state and built-ins
+    pub fn update_from_workflow(&mut self, workflow: &Workflow) {
+        let mut kws = vec![
+            "defparam",
+            "defcircuit",
+            "defobs",
+            "run",
+            "let",
+            "write-file",
+            "loop",
+            "def",
+            ":load",
+            ":save",
+            ":vars",
+            ":macros",
+            ":circuits",
+            ":obs",
+            ":history",
+            ":reset",
+            ":quit",
+            ":exit",
+        ]
+        .into_iter()
+        .map(String::from)
+        .collect::<Vec<_>>();
+
+        // Add user-defined symbols
+        kws.extend(workflow.params.keys().cloned());
+        kws.extend(workflow.macros.keys().cloned());
+        kws.extend(workflow.circuits.keys().cloned());
+        kws.extend(workflow.observables.keys().cloned());
+
+        self.keywords = kws;
+    }
+}
+
+impl Completer for QclCompleter {
+    type Candidate = Pair;
+    fn complete(
+        &self,
+        line: &str,
+        pos: usize,
+        _ctx: &rustyline::Context<'_>,
+    ) -> Result<(usize, Vec<Pair>), rustyline::error::ReadlineError> {
+        let start = line[..pos]
+            .rfind(|c: char| c.is_whitespace())
+            .map_or(0, |i| i + 1);
+        let prefix = &line[start..pos];
+        let stripped = prefix.trim_start_matches(|c: char| !c.is_alphanumeric());
+        let mut matches = Vec::new();
+        for kw in &self.keywords {
+            if kw.starts_with(stripped) {
+                // Preserve any leading non-alphanumeric chars (like '(')
+                let leading = &prefix[..prefix.len() - stripped.len()];
+                matches.push(Pair {
+                    display: format!("{}{}", leading, kw),
+                    replacement: format!("{}{}", leading, kw),
+                });
+            }
+        }
+        Ok((start, matches))
+    }
+}
+
+impl Helper for QclCompleter {}
+impl Hinter for QclCompleter {
+    type Hint = String;
+    fn hint(&self, _line: &str, _pos: usize, _ctx: &rustyline::Context<'_>) -> Option<String> {
+        None
+    }
+}
+impl Highlighter for QclCompleter {}
+impl Validator for QclCompleter {
+    fn validate(
+        &self,
+        _ctx: &mut ValidationContext<'_>,
+    ) -> Result<ValidationResult, rustyline::error::ReadlineError> {
+        Ok(ValidationResult::Valid(None))
+    }
 }
