@@ -1,4 +1,3 @@
-use schemars::generate::SchemaSettings;
 use std::collections::{BTreeMap, HashMap};
 use std::hash::RandomState;
 use std::sync::Arc;
@@ -6,7 +5,7 @@ use std::sync::Arc;
 use futures_util::StreamExt;
 use kube::{
     Resource,
-    api::{Api, ListParams, Patch, PatchParams, PostParams},
+    api::{Api, Patch, PatchParams, PostParams},
     client::Client,
     runtime::{Controller, controller::Action},
 };
@@ -15,22 +14,18 @@ use thiserror::Error;
 use tokio::time::Duration;
 use tracing::{error, info, warn};
 
-// K8s API type imports
 use k8s_openapi::api::batch::v1::{Job, JobSpec};
 use k8s_openapi::api::core::v1::{
     ConfigMap, ConfigMapVolumeSource, Container, PersistentVolumeClaim, PersistentVolumeClaimSpec,
-    PersistentVolumeClaimVolumeSource, PodSpec, PodTemplateSpec, ResourceRequirements, Volume,
+    PersistentVolumeClaimVolumeSource, PodSpec, PodTemplateSpec, Volume,
     VolumeMount, VolumeResourceRequirements,
 };
 use k8s_openapi::apimachinery::pkg::api::resource::Quantity;
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta;
 
-// Serde and schema generation imports
 use qflow_types::{QFlowTask, QFlowTaskSpec, QcbmOptimizerSpec, QuantumWorkflow};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-// Custom types from the original qflow_types crate are now defined here for clarity
-// based on the feature request.
 
 /// Defines the volume for a workflow.
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
@@ -113,7 +108,6 @@ fn create_job_for_task(
 ) -> Result<Job, Error> {
     let pvc_name = format!("{}-{}", wf.metadata.name.clone().unwrap(), PVC_NAME);
 
-    // Common volume and mount for the shared workspace
     let mut volumes = vec![Volume {
         name: "qflow-workspace".to_string(),
         persistent_volume_claim: Some(PersistentVolumeClaimVolumeSource {
@@ -128,12 +122,11 @@ fn create_job_for_task(
         ..Default::default()
     }];
 
-    // Task-specific container setup
     let container = match &task.spec {
         QFlowTaskSpec::Classical { image } => Container {
             name: "task-runner".to_string(),
             image: Some(image.clone()),
-            command: Some(vec!["/qsim".to_string()]), // Replace with actual executable if different
+            command: Some(vec!["/qsim".to_string()]),
             volume_mounts: Some(volume_mounts),
             image_pull_policy: Some("Never".to_string()),
             ..Default::default()
@@ -172,7 +165,6 @@ fn create_job_for_task(
                 ..Default::default()
             }
         }
-        // New logic branch for QCBM tasks
         QFlowTaskSpec::Qcbm(qcbm_spec) => {
             let training_data_json = serde_json::to_string(&qcbm_spec.training_data)
                 .map_err(|e| Error::Anyhow(anyhow::Error::from(e)))?;
@@ -206,7 +198,7 @@ fn create_job_for_task(
                 name: "task-runner".to_string(),
                 image: Some(qcbm_spec.image.clone()),
                 args: Some(args),
-                volume_mounts: Some(volume_mounts), // Mount shared workspace
+                volume_mounts: Some(volume_mounts),
                 image_pull_policy: Some("Never".to_string()),
                 ..Default::default()
             }
@@ -260,8 +252,6 @@ async fn reconcile(wf: Arc<QuantumWorkflow>, ctx: Arc<Context>) -> Result<Action
     let job_api = Api::<Job>::namespaced(client.clone(), &ns);
     let cm_api = Api::<ConfigMap>::namespaced(client.clone(), &ns);
 
-    // 1. Initialize status and PVC if they don't exist
-    // if wf.status.is_none() || wf.status.as_ref().unwrap().task_statuses.is_none() {
     if wf.status.is_none() {
         info!(
             "Initializing status for workflow '{}'",
@@ -280,7 +270,6 @@ async fn reconcile(wf: Arc<QuantumWorkflow>, ctx: Arc<Context>) -> Result<Action
         return Ok(Action::requeue(Duration::from_secs(1)));
     }
 
-    // Dag construction
     let mut graph = DiGraphMap::<&str, _, RandomState>::new();
     let task_map: HashMap<&str, &QFlowTask> =
         wf.spec.tasks.iter().map(|t| (t.name.as_str(), t)).collect();
@@ -305,7 +294,6 @@ async fn reconcile(wf: Arc<QuantumWorkflow>, ctx: Arc<Context>) -> Result<Action
         return Err(Error::InvalidWorkflow("Workflow has a cycle".to_string()));
     }
 
-    // handle status
     let mut current_statuses = wf
         .status
         .as_ref()
@@ -314,7 +302,6 @@ async fn reconcile(wf: Arc<QuantumWorkflow>, ctx: Arc<Context>) -> Result<Action
         .unwrap_or_default();
     let mut made_change = false;
 
-    // Check running jobs
     for (task_name, status) in current_statuses.iter_mut() {
         if *status == TASK_RUNNING {
             let job_name = format!("{}-{}", wf.metadata.name.clone().unwrap(), task_name);
@@ -335,7 +322,6 @@ async fn reconcile(wf: Arc<QuantumWorkflow>, ctx: Arc<Context>) -> Result<Action
         }
     }
 
-    // Ensure every task is present in current_statuses, defaulting to Pending if missing
     for task in &wf.spec.tasks {
         let task_name = &task.name;
         if !current_statuses.contains_key(task_name) {
@@ -343,7 +329,6 @@ async fn reconcile(wf: Arc<QuantumWorkflow>, ctx: Arc<Context>) -> Result<Action
         }
     }
 
-    // Start new jobs
     let mut topo = Topo::new(&graph);
     while let Some(node_idx) = topo.next(&graph) {
         let task = task_map[node_idx];
@@ -362,7 +347,6 @@ async fn reconcile(wf: Arc<QuantumWorkflow>, ctx: Arc<Context>) -> Result<Action
                 } = &task.spec
                 {
                     let cm_name = format!("{}-{}-cm", wf.metadata.name.clone().unwrap(), task.name);
-                    // Ignore if exists logic for ConfigMap
                     match cm_api.get(&cm_name).await {
                         Ok(_) => {
                             info!("ConfigMap '{}' already exists, skipping creation.", cm_name);
@@ -420,7 +404,6 @@ async fn reconcile(wf: Arc<QuantumWorkflow>, ctx: Arc<Context>) -> Result<Action
         }
     }
 
-    // 4. Update overall workflow status
     let final_phase = if current_statuses.values().any(|s| s == TASK_FAILED) {
         Some(TASK_FAILED.to_string())
     } else if current_statuses.values().all(|s| s == TASK_SUCCEEDED) {

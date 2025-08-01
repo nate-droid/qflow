@@ -1,42 +1,69 @@
 mod parser;
 mod workflow;
 use crate::parser::qcl_parser;
+use crate::parser::{Declaration, validate_ast};
+use crate::workflow::Workflow;
 use chumsky::Parser;
+use std::env;
+use std::fs;
 
 fn main() {
-    let qcl_code = r#"
-        ; QCL Example: A simple VQE workflow
+    // Get the QCL file path from command line arguments
+    let args: Vec<String> = env::args().collect();
+    if args.len() < 2 {
+        eprintln!("Usage: {} <qcl_file>", args[0]);
+        std::process::exit(1);
+    }
+    let file_path = &args[1];
 
-        ; == 1. Define Parameters ==
-        (defparam 'theta_A 0.5)
-        (defparam 'theta_B -0.5)
+    // Read the QCL file
+    let qcl_code = match fs::read_to_string(file_path) {
+        Ok(content) => content,
+        Err(e) => {
+            eprintln!("Failed to read file '{}': {}", file_path, e);
+            std::process::exit(1);
+        }
+    };
 
-        ; == 2. Define Components ==
-        (defcircuit 'ansatz (qubits: 2)
-            (H 0)
-            (CX 0 1)
-            (RY 'theta_A 0)
-            (RY 'theta_B 1)
-        )
+    println!("Attempting to parse QCL code from '{}'...\n", file_path);
 
-        (defobs 'cost_operator "Z0 Z1")
-
-        (run (optimizer: 'my_optimizer' cost: 'total_cost' steps: 100))
-    "#;
-
-    println!("Attempting to parse QCL code...\n");
-
-    let result = qcl_parser().parse(qcl_code);
+    let result = qcl_parser().parse(&qcl_code);
 
     if result.has_errors() {
         println!("--- Parsing Failed ---");
         result.errors().for_each(|e| println!("Error: {}", e));
+        std::process::exit(1);
     }
 
-    if let Some(ast) = result.output() {
-        println!("--- Successfully Parsed AST ---");
-        println!("{:#?}", ast);
+    let ast = match result.output() {
+        Some(ast) => ast,
+        None => {
+            println!("--- Parsing produced no AST ---");
+            std::process::exit(1);
+        }
+    };
+
+    println!("--- Successfully Parsed AST ---");
+    println!("{:#?}", ast);
+
+    // Validate AST
+    let declarations = match validate_ast(ast) {
+        Ok(decls) => decls,
+        Err(e) => {
+            println!("--- Validation Failed ---");
+            println!("{}", e);
+            std::process::exit(1);
+        }
+    };
+
+    // Execute workflow
+    let mut workflow = Workflow::new();
+    if let Err(e) = workflow.run(declarations) {
+        println!("--- Workflow Execution Failed ---");
+        println!("{}", e);
+        std::process::exit(1);
     }
+    println!("--- Workflow Execution Complete ---");
 }
 
 #[cfg(test)]
