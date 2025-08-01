@@ -1,0 +1,4 @@
+(defcircuit 'bell_state (qubits 2)
+    (H 0)
+    (CX 0 1)
+)

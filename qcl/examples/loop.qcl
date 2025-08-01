@@ -1,0 +1,4 @@
+(loop (times 3)
+    (defparam 'alpha 0.5)
+    (defparam 'beta 0.7)
+)

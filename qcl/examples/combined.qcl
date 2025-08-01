@@ -1,0 +1,12 @@
+(defparam 'theta 0.785)
+
+(defcircuit 'single_qubit (qubits 1)
+    (RY 'theta 0)
+)
+
+(defobs 'z_obs "Z0")
+
+(run
+    (circuit: 'single_qubit)
+    (obs: 'z_obs)
+)

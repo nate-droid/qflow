@@ -1,0 +1,3 @@
+(def 'apply_hadamard (q)
+    (H q)
+)

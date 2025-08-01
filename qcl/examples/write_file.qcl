@@ -1,0 +1,1 @@
+(write-file "output.txt" 42)

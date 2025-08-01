@@ -1,0 +1,4 @@
+(run
+    (circuit: 'bell_state)
+    (obs: 'simple_obs)
+)
