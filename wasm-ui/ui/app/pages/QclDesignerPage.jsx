@@ -17,7 +17,7 @@ function useDebounce(value, delay) {
 
 function parseParameters(code) {
   const params = {};
-  const regex = /\(defparam\s+'([a-zA-Z0-9_-]+)\s+([0-9.-]+)\)/g;
+  const regex = /\(defparam\s+([a-zA-Z0-9_-]+)\s+([0-9.-]+)\)/g;
   let match;
   while ((match = regex.exec(code)) !== null) {
     params[match[1]] = parseFloat(match[2]);
@@ -26,16 +26,28 @@ function parseParameters(code) {
 }
 
 function parseCircuit(code) {
+  // Updated regex to match: (defcircuit name (params...) (body...))
   const circuitRegex =
-    /\(defcircuit\s+'([a-zA-Z0-9_-]+)\s+\(\s*([\s\S]*?)\s*\)\)/;
+      /\(defcircuit\s+([a-zA-Z0-9_-]+)\s+\(([\s\S]*?)\)\s+\(([\s\S]*)\)\s*\)/;
   const circuitMatch = code.match(circuitRegex);
 
   if (!circuitMatch) return null;
 
   const name = circuitMatch[1];
-  const body = circuitMatch[2];
+  const paramsRaw = circuitMatch[2];
+  const body = circuitMatch[3];
 
-  const gateRegex = /\(\s*([A-Z]+)\s+((?:'?[a-zA-Z0-9_.-]+\s*)+)\)/g;
+  // DEBUG: Print body string before gate parsing
+  console.log("DEBUG parseCircuit body string:", JSON.stringify(body));
+
+  // Parse params as array of names
+  const params = paramsRaw
+      .split(/\s+/)
+      .map((p) => p.trim())
+      .filter((p) => p.length > 0);
+
+  // Parse gates from body (allow for extra parentheses around gate list)
+  const gateRegex = /\(\s*\(?\s*([A-Z]+)\s+((?:[a-zA-Z0-9_.-]+\s*)+)\)?\s*\)/g;
   let gateMatch;
   const gates = [];
   let maxQubit = -1;
@@ -44,8 +56,8 @@ function parseCircuit(code) {
     const type = gateMatch[1];
     const args = gateMatch[2].trim().split(/\s+/);
     const gateQubits = args
-      .map((arg) => parseInt(arg, 10))
-      .filter((num) => !isNaN(num));
+        .map((arg) => parseInt(arg, 10))
+        .filter((num) => !isNaN(num));
 
     if (gateQubits.length > 0) {
       maxQubit = Math.max(maxQubit, ...gateQubits);
@@ -60,6 +72,7 @@ function parseCircuit(code) {
 
   return {
     name,
+    params,
     gates,
     numQubits: maxQubit > -1 ? maxQubit + 1 : 0,
   };
@@ -79,28 +92,28 @@ const GateIcon = ({ gate, theta }) => {
   };
   const style = gateStyles[gate] || "bg-gray-400 border-gray-500";
   return (
-    <div
-      className={`w-10 h-10 rounded-md flex items-center justify-center text-white font-bold text-xs border-b-2 ${style} flex-col`}
-      title={theta !== undefined ? `${gate}(${theta})` : gate}
-    >
-      <span>{gate}</span>
-    </div>
+      <div
+          className={`w-10 h-10 rounded-md flex items-center justify-center text-white font-bold text-xs border-b-2 ${style} flex-col`}
+          title={theta !== undefined ? `${gate}(${theta})` : gate}
+      >
+        <span>{gate}</span>
+      </div>
   );
 };
 
 const CnotControl = () => (
-  <div className="w-10 h-10 flex items-center justify-center">
-    <div className="w-4 h-4 bg-blue-500 rounded-full border-2 border-blue-300"></div>
-  </div>
+    <div className="w-10 h-10 flex items-center justify-center">
+      <div className="w-4 h-4 bg-blue-500 rounded-full border-2 border-blue-300"></div>
+    </div>
 );
 
 const CnotTarget = () => (
-  <div className="w-10 h-10 flex items-center justify-center relative">
-    <div className="w-8 h-8 border-2 border-blue-500 rounded-full flex items-center justify-center">
-      <div className="w-0.5 h-5 bg-blue-500 absolute"></div>
-      <div className="w-5 h-0.5 bg-blue-500 absolute"></div>
+    <div className="w-10 h-10 flex items-center justify-center relative">
+      <div className="w-8 h-8 border-2 border-blue-500 rounded-full flex items-center justify-center">
+        <div className="w-0.5 h-5 bg-blue-500 absolute"></div>
+        <div className="w-5 h-0.5 bg-blue-500 absolute"></div>
+      </div>
     </div>
-  </div>
 );
 
 //================================================================================
@@ -133,8 +146,8 @@ const QclCodeEditor = ({ code, setCode, errorLine }) => {
     ];
 
     const combinedRegex = new RegExp(
-      tokenDefs.map((t) => `(${t.regex.source})`).join("|"),
-      "g",
+        tokenDefs.map((t) => `(${t.regex.source})`).join("|"),
+        "g",
     );
 
     return code.split("\n").map((line, lineIndex) => {
@@ -156,10 +169,10 @@ const QclCodeEditor = ({ code, setCode, errorLine }) => {
         }
         if (matchedDef && matchedDef.color) {
           parts.push(
-            <span
-              key={`${lineIndex}-${lastIndex}`}
-              style={{ color: matchedDef.color }}
-            >
+              <span
+                  key={`${lineIndex}-${lastIndex}`}
+                  style={{ color: matchedDef.color }}
+              >
               {tokenValue}
             </span>,
           );
@@ -173,104 +186,104 @@ const QclCodeEditor = ({ code, setCode, errorLine }) => {
       }
 
       return (
-        <div
-          key={lineIndex}
-          className={`line leading-6 ${lineIndex + 1 === errorLine ? "bg-red-900/30" : ""}`}
-        >
+          <div
+              key={lineIndex}
+              className={`line leading-6 ${lineIndex + 1 === errorLine ? "bg-red-900/30" : ""}`}
+          >
           <span className="w-8 inline-block text-slate-600 text-right pr-4 select-none">
             {lineIndex + 1}
           </span>
-          {parts.map((part, partIndex) => (
-            <React.Fragment key={partIndex}>{part}</React.Fragment>
-          ))}
-        </div>
+            {parts.map((part, partIndex) => (
+                <React.Fragment key={partIndex}>{part}</React.Fragment>
+            ))}
+          </div>
       );
     });
   }, [code, errorLine]);
 
   return (
-    <div className="relative font-mono text-sm bg-slate-900 rounded-lg border border-slate-700 h-full flex flex-col">
-      <div className="p-3 border-b border-slate-700 flex-shrink-0">
-        <h3 className="text-base font-bold text-slate-200">QCL Code Editor</h3>
-      </div>
-      <div className="relative flex-1 overflow-hidden">
+      <div className="relative font-mono text-sm bg-slate-900 rounded-lg border border-slate-700 h-full flex flex-col">
+        <div className="p-3 border-b border-slate-700 flex-shrink-0">
+          <h3 className="text-base font-bold text-slate-200">QCL Code Editor</h3>
+        </div>
+        <div className="relative flex-1 overflow-hidden">
         <pre
-          ref={backdropRef}
-          className="absolute inset-0 p-4 pl-12 whitespace-pre font-mono text-sm leading-6 pointer-events-none overflow-auto"
-          style={{ margin: 0 }}
+            ref={backdropRef}
+            className="absolute inset-0 p-4 pl-12 whitespace-pre font-mono text-sm leading-6 pointer-events-none overflow-auto"
+            style={{ margin: 0 }}
         >
           {highlightedCode}
         </pre>
-        <textarea
-          ref={editorRef}
-          value={code}
-          onChange={(e) => setCode(e.target.value)}
-          onScroll={handleScroll}
-          spellCheck="false"
-          className="absolute inset-0 p-4 pl-12 bg-transparent text-transparent caret-white resize-none border-0 outline-none overflow-auto whitespace-pre font-mono text-sm leading-6"
-        />
+          <textarea
+              ref={editorRef}
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              onScroll={handleScroll}
+              spellCheck="false"
+              className="absolute inset-0 p-4 pl-12 bg-transparent text-transparent caret-white resize-none border-0 outline-none overflow-auto whitespace-pre font-mono text-sm leading-6"
+          />
+        </div>
       </div>
-    </div>
   );
 };
 
 const ParameterDashboard = ({ params, onParamChange }) => {
   return (
-    <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700 h-full flex flex-col">
-      <h3 className="text-base font-bold text-slate-200 mb-4 border-b border-slate-600 pb-2">
-        Parameter Controls
-      </h3>
-      <div className="overflow-y-auto flex-grow pr-2">
-        {Object.keys(params).length === 0 ? (
-          <div className="text-center text-slate-400 pt-10">
-            <p>
-              Define parameters using{" "}
-              <code className="bg-slate-700 p-1 rounded-md text-sm">
-                (defparam 'name value)
-              </code>
-              .
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-6">
-            {Object.entries(params).map(([name, value]) => (
-              <div key={name}>
-                <label className="block text-sm font-medium text-slate-300 mb-2">
-                  {name}
-                </label>
-                <div className="flex items-center space-x-4">
-                  <input
-                    type="range"
-                    min="-6.28"
-                    max="6.28"
-                    step="0.01"
-                    value={value}
-                    onChange={(e) =>
-                      onParamChange(name, parseFloat(e.target.value))
-                    }
-                    className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer"
-                  />
-                  <span className="font-mono text-indigo-300 w-20 text-center bg-slate-700 py-1 rounded-md">
+      <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700 h-full flex flex-col">
+        <h3 className="text-base font-bold text-slate-200 mb-4 border-b border-slate-600 pb-2">
+          Parameter Controls
+        </h3>
+        <div className="overflow-y-auto flex-grow pr-2">
+          {Object.keys(params).length === 0 ? (
+              <div className="text-center text-slate-400 pt-10">
+                <p>
+                  Define parameters using{" "}
+                  <code className="bg-slate-700 p-1 rounded-md text-sm">
+                    (defparam name value)
+                  </code>
+                  .
+                </p>
+              </div>
+          ) : (
+              <div className="space-y-6">
+                {Object.entries(params).map(([name, value]) => (
+                    <div key={name}>
+                      <label className="block text-sm font-medium text-slate-300 mb-2">
+                        {name}
+                      </label>
+                      <div className="flex items-center space-x-4">
+                        <input
+                            type="range"
+                            min="-6.28"
+                            max="6.28"
+                            step="0.01"
+                            value={value}
+                            onChange={(e) =>
+                                onParamChange(name, parseFloat(e.target.value))
+                            }
+                            className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer"
+                        />
+                        <span className="font-mono text-indigo-300 w-20 text-center bg-slate-700 py-1 rounded-md">
                     {value.toFixed(2)}
                   </span>
-                </div>
+                      </div>
+                    </div>
+                ))}
               </div>
-            ))}
-          </div>
-        )}
+          )}
+        </div>
       </div>
-    </div>
   );
 };
 
 const ExecutionPanel = ({
-  logs,
-  result,
-  onRun,
-  onStop,
-  isRunning,
-  isMockMode,
-}) => {
+                          logs,
+                          result,
+                          onRun,
+                          onStop,
+                          isRunning,
+                          isMockMode,
+                        }) => {
   const logEndRef = useRef(null);
 
   useEffect(() => {
@@ -281,81 +294,81 @@ const ExecutionPanel = ({
     if (!result || !result.probabilities) return [];
     const numQubits = Math.log2(result.probabilities.length);
     return Array.from(
-      { length: 1 << numQubits },
-      (_, i) => `|${i.toString(2).padStart(numQubits, "0")}⟩`,
+        { length: 1 << numQubits },
+        (_, i) => `|${i.toString(2).padStart(numQubits, "0")}⟩`,
     );
   }, [result]);
 
   return (
-    <div className="bg-slate-900 rounded-lg border border-slate-700 flex flex-col h-full">
-      <div className="flex justify-between items-center p-3 border-b border-slate-700 flex-shrink-0">
-        <div className="flex items-center gap-4">
-          <h3 className="text-base font-bold text-slate-200">
-            Execution & Output
-          </h3>
-          {isMockMode && (
-            <span className="text-xs font-semibold text-yellow-500 bg-yellow-900/50 px-2 py-1 rounded-full">
+      <div className="bg-slate-900 rounded-lg border border-slate-700 flex flex-col h-full">
+        <div className="flex justify-between items-center p-3 border-b border-slate-700 flex-shrink-0">
+          <div className="flex items-center gap-4">
+            <h3 className="text-base font-bold text-slate-200">
+              Execution & Output
+            </h3>
+            {isMockMode && (
+                <span className="text-xs font-semibold text-yellow-500 bg-yellow-900/50 px-2 py-1 rounded-full">
               Demonstration Mode
             </span>
-          )}
+            )}
+          </div>
+          <div className="flex gap-2">
+            <button
+                onClick={onRun}
+                disabled={isRunning}
+                className="px-4 py-2 bg-indigo-600 rounded-md hover:bg-indigo-700 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              {isRunning ? "Running..." : "Run"}
+            </button>
+            <button
+                onClick={onStop}
+                disabled={!isRunning}
+                className="px-4 py-2 bg-red-600 rounded-md hover:bg-red-700 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Stop
+            </button>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <button
-            onClick={onRun}
-            disabled={isRunning}
-            className="px-4 py-2 bg-indigo-600 rounded-md hover:bg-indigo-700 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-          >
-            {isRunning ? "Running..." : "Run"}
-          </button>
-          <button
-            onClick={onStop}
-            disabled={!isRunning}
-            className="px-4 py-2 bg-red-600 rounded-md hover:bg-red-700 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Stop
-          </button>
-        </div>
-      </div>
-      <div className="p-4 font-mono text-sm text-slate-300 overflow-y-auto flex-grow">
-        {logs.map((log, index) => (
-          <div
-            key={index}
-            className="whitespace-pre-wrap"
-            dangerouslySetInnerHTML={{ __html: log }}
-          ></div>
-        ))}
-        {result && result.probabilities && (
-          <div className="mt-4 pt-4 border-t border-slate-700">
-            <h4 className="text-slate-200 font-bold mb-2">
-              Simulation Results
-            </h4>
-            <div className="space-y-2 font-mono text-sm max-h-40 overflow-y-auto pr-2">
-              {result.probabilities.map((prob, i) => (
-                <div key={i} className="flex items-center gap-4">
-                  <span className="text-cyan-300 w-24">{basisStates[i]}</span>
-                  <div className="flex-grow bg-slate-700 rounded-full h-4">
-                    <div
-                      className="bg-cyan-500 h-4 rounded-full transition-all duration-500"
-                      style={{ width: `${prob * 100}%` }}
-                    />
-                  </div>
-                  <span className="w-20 text-right">
+        <div className="p-4 font-mono text-sm text-slate-300 overflow-y-auto flex-grow">
+          {logs.map((log, index) => (
+              <div
+                  key={index}
+                  className="whitespace-pre-wrap"
+                  dangerouslySetInnerHTML={{ __html: log }}
+              ></div>
+          ))}
+          {result && result.probabilities && (
+              <div className="mt-4 pt-4 border-t border-slate-700">
+                <h4 className="text-slate-200 font-bold mb-2">
+                  Simulation Results
+                </h4>
+                <div className="space-y-2 font-mono text-sm max-h-40 overflow-y-auto pr-2">
+                  {result.probabilities.map((prob, i) => (
+                      <div key={i} className="flex items-center gap-4">
+                        <span className="text-cyan-300 w-24">{basisStates[i]}</span>
+                        <div className="flex-grow bg-slate-700 rounded-full h-4">
+                          <div
+                              className="bg-cyan-500 h-4 rounded-full transition-all duration-500"
+                              style={{ width: `${prob * 100}%` }}
+                          />
+                        </div>
+                        <span className="w-20 text-right">
                     {(prob * 100).toFixed(2)}%
                   </span>
+                      </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          </div>
-        )}
-        {result && result.error && (
-          <div className="mt-4 pt-4 border-t border-slate-700">
-            <h4 className="text-red-400 font-bold mb-2">Simulation Error</h4>
-            <p className="text-red-300">{result.error}</p>
-          </div>
-        )}
-        <div ref={logEndRef} />
+              </div>
+          )}
+          {result && result.error && (
+              <div className="mt-4 pt-4 border-t border-slate-700">
+                <h4 className="text-red-400 font-bold mb-2">Simulation Error</h4>
+                <p className="text-red-300">{result.error}</p>
+              </div>
+          )}
+          <div ref={logEndRef} />
+        </div>
       </div>
-    </div>
   );
 };
 
@@ -372,27 +385,39 @@ const mockSimulator = {
 const GatePalette = ({ onDragStart }) => {
   const gates = ["H", "X", "CX", "RX"];
   return (
-    <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700">
-      <h3 className="text-base font-bold text-slate-200 mb-4 border-b border-slate-600 pb-2">
-        Gate Palette
-      </h3>
-      <div className="grid grid-cols-4 gap-2">
-        {gates.map((gate) => (
-          <div
-            key={gate}
-            draggable
-            onDragStart={(e) => onDragStart(e, gate)}
-            className="flex justify-center items-center p-1 cursor-grab active:cursor-grabbing"
-          >
-            <GateIcon gate={gate} />
-          </div>
-        ))}
+      <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700">
+        <h3 className="text-base font-bold text-slate-200 mb-4 border-b border-slate-600 pb-2">
+          Gate Palette
+        </h3>
+        <div className="grid grid-cols-4 gap-2">
+          {gates.map((gate) => (
+              <div
+                  key={gate}
+                  draggable
+                  onDragStart={(e) => onDragStart(e, gate)}
+                  className="flex justify-center items-center p-1 cursor-grab active:cursor-grabbing"
+              >
+                <GateIcon gate={gate} />
+              </div>
+          ))}
+        </div>
       </div>
-    </div>
   );
 };
 
 const CircuitGrid = ({ circuit, onCircuitUpdate }) => {
+  // Helper to export QCL code for the current circuit (new syntax)
+  const exportQclCode = () => {
+    if (!circuit) return "";
+    const paramsString =
+        circuit.params && circuit.params.length > 0
+            ? circuit.params.join(" ")
+            : "";
+    const gatesString = circuit.gates
+        .map((gate) => `    (${gate.type} ${gate.args.join(" ")})`)
+        .join("\n");
+    return `(defcircuit ${circuit.name} (${paramsString}) (\n${gatesString}\n))`;
+  };
   const numQubits = circuit ? circuit.numQubits : 1;
   const numMoments = 20;
   const cellHeight = 64;
@@ -401,8 +426,8 @@ const CircuitGrid = ({ circuit, onCircuitUpdate }) => {
   const moments = useMemo(() => {
     if (!circuit) return [];
     const gridMoments = Array(numMoments)
-      .fill(null)
-      .map(() => []);
+        .fill(null)
+        .map(() => []);
     const timeSlots = Array(numQubits).fill(0);
 
     circuit.gates.forEach((gate) => {
@@ -410,8 +435,8 @@ const CircuitGrid = ({ circuit, onCircuitUpdate }) => {
       if (involvedQubits.length === 0) return;
 
       const momentIndex = Math.max(
-        0,
-        ...involvedQubits.map((q) => timeSlots[q]),
+          0,
+          ...involvedQubits.map((q) => timeSlots[q]),
       );
       if (momentIndex >= numMoments) return;
 
@@ -467,79 +492,80 @@ const CircuitGrid = ({ circuit, onCircuitUpdate }) => {
 
   if (!circuit) {
     return (
-      <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700 h-full flex flex-col">
-        <h3 className="text-base font-bold text-slate-200 mb-4 border-b border-slate-600 pb-2">
-          Circuit Designer
-        </h3>
-        <div className="text-center text-slate-400 pt-10 flex-grow">
-          <p>Define a circuit in the editor to enable the designer.</p>
+        <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700 h-full flex flex-col">
+          <h3 className="text-base font-bold text-slate-200 mb-4 border-b border-slate-600 pb-2">
+            Circuit Designer
+          </h3>
+          <div className="text-center text-slate-400 pt-10 flex-grow">
+            <p>Define a circuit in the editor to enable the designer.</p>
+          </div>
         </div>
-      </div>
     );
   }
 
   return (
-    <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700 h-full flex flex-col">
-      <h3 className="text-base font-bold text-slate-200 mb-4 border-b border-slate-600 pb-2">
-        Circuit Designer:{" "}
-        <span className="font-mono text-indigo-300">{circuit.name}</span>
-      </h3>
-      <div className="overflow-auto">
-        <div
-          className="relative inline-block"
-          style={{ minWidth: `${numMoments * cellWidth}px` }}
-        >
-          {Array.from({ length: numQubits }).map((_, qIndex) => (
-            <div
-              key={`line-${qIndex}`}
-              className="absolute h-0.5 bg-gray-500"
-              style={{
-                top: `${qIndex * cellHeight + 31.5}px`,
-                left: "16px",
-                right: "16px",
-                zIndex: 0,
-              }}
-            />
-          ))}
+      <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700 h-full flex flex-col">
+        <h3 className="text-base font-bold text-slate-200 mb-4 border-b border-slate-600 pb-2">
+          Circuit Designer:{" "}
+          <span className="font-mono text-indigo-300">{circuit.name}</span>
+        </h3>
+
+        <div className="overflow-auto">
           <div
-            className="relative z-10 grid"
-            style={{
-              gridTemplateColumns: `repeat(${numMoments}, ${cellWidth}px)`,
-              gridTemplateRows: `repeat(${numQubits}, ${cellHeight}px)`,
-            }}
+              className="relative inline-block"
+              style={{ minWidth: `${numMoments * cellWidth}px` }}
           >
-            {Array.from({ length: numQubits * numMoments }).map((_, i) => {
-              const q = Math.floor(i / numMoments);
-              const m = i % numMoments;
-              const momentGates = moments[m] || [];
-              const singleGate = momentGates.find((g) => g.qubit === q);
-              const cnotGate = momentGates.find(
-                (g) => g.type === "CNOT" && (g.control === q || g.target === q),
-              );
-              let gateComponent = null;
-
-              if (singleGate) {
-                gateComponent = <GateIcon gate={singleGate.type} />;
-              } else if (cnotGate) {
-                if (cnotGate.control === q) gateComponent = <CnotControl />;
-                else gateComponent = <CnotTarget />;
-              }
-
-              return (
+            {Array.from({ length: numQubits }).map((_, qIndex) => (
                 <div
-                  key={`${q}-${m}`}
-                  onDrop={(e) => handleDrop(e, q, m)}
-                  onDragOver={handleDragOver}
-                  className="w-full h-full flex items-center justify-center border-r border-dashed border-slate-700/50"
-                >
-                  {gateComponent}
-                </div>
-              );
-            })}
+                    key={`line-${qIndex}`}
+                    className="absolute h-0.5 bg-gray-500"
+                    style={{
+                      top: `${qIndex * cellHeight + 31.5}px`,
+                      left: "16px",
+                      right: "16px",
+                      zIndex: 0,
+                    }}
+                />
+            ))}
+            <div
+                className="relative z-10 grid"
+                style={{
+                  gridTemplateColumns: `repeat(${numMoments}, ${cellWidth}px)`,
+                  gridTemplateRows: `repeat(${numQubits}, ${cellHeight}px)`,
+                }}
+            >
+              {Array.from({ length: numQubits * numMoments }).map((_, i) => {
+                const q = Math.floor(i / numMoments);
+                const m = i % numMoments;
+                const momentGates = moments[m] || [];
+                const singleGate = momentGates.find((g) => g.qubit === q);
+                const cnotGate = momentGates.find(
+                    (g) => g.type === "CNOT" && (g.control === q || g.target === q),
+                );
+                let gateComponent = null;
+
+                if (singleGate) {
+                  gateComponent = <GateIcon gate={singleGate.type} />;
+                } else if (cnotGate) {
+                  if (cnotGate.control === q) gateComponent = <CnotControl />;
+                  else gateComponent = <CnotTarget />;
+                }
+
+                return (
+                    <div
+                        key={`${q}-${m}`}
+                        onDrop={(e) => handleDrop(e, q, m)}
+                        onDragOver={handleDragOver}
+                        className="w-full h-full flex items-center justify-center border-r border-dashed border-slate-700/50"
+                    >
+                      {gateComponent}
+                    </div>
+                );
+              })}
+            </div>
           </div>
         </div>
       </div>
-    </div>
   );
 };
 
@@ -550,17 +576,17 @@ const QclIdePage = () => {
   const initialCode = `
 ; Welcome to the Visual QCL IDE!
 ; This example demonstrates a VQE-like optimization loop.
-; Press "Run" to watch 'theta' update automatically.
+; Press "Run" to watch theta update automatically.
 
-(defparam 'theta 1.57)
+(defparam theta 1.57)
 
-(defcircuit 'vqe_ansatz (
-    (RX 'theta 0)
+(defcircuit vqe_ansatz (theta) (
+    ((RX theta 0))
 ))
 
 (loop 20 (
-    (let 'theta) ; In a real scenario, an optimizer would update this.
-    (run 'vqe_ansatz)
+    (let theta) ; In a real scenario, an optimizer would update this.
+    (run vqe_ansatz)
 ))
     `.trim();
 
@@ -570,6 +596,12 @@ const QclIdePage = () => {
   const [logs, setLogs] = useState([]);
   const [simResult, setSimResult] = useState(null);
   const [isRunning, setIsRunning] = useState(false);
+
+  // DEBUG: Log parseCircuit output
+  useEffect(() => {
+    const parsed = parseCircuit(code);
+    console.log("DEBUG parseCircuit output:", parsed);
+  }, [code]);
 
   const [wasm, setWasm] = useState(null);
   const [isMockMode, setIsMockMode] = useState(false);
@@ -605,14 +637,21 @@ const QclIdePage = () => {
     setCircuit(updatedCircuit);
 
     const gatesString = updatedCircuit.gates
-      .map((gate) => {
-        return `    (${gate.type} ${gate.args.join(" ")})`;
-      })
-      .join("\n");
+        .map((gate) => {
+          return `    (${gate.type} ${gate.args.join(" ")})`;
+        })
+        .join("\n");
 
+    // Build params string for circuit
+    const paramsString =
+        updatedCircuit.params && updatedCircuit.params.length > 0
+            ? updatedCircuit.params.join(" ")
+            : "";
+
+    // Replace old circuit definition with new syntax
     const newCode = code.replace(
-      /\(defcircuit\s+'([a-zA-Z0-9_-]+)\s+\([\s\S]*?\)\)/,
-      `(defcircuit '${updatedCircuit.name} (\n${gatesString}\n))`,
+        /\(defcircuit\s+[a-zA-Z0-9_-]+\s+\([^\)]*\)\s+\([^\)]*\)\s*\)/,
+        `(defcircuit ${updatedCircuit.name} (${paramsString}) (\n${gatesString}\n))`,
     );
     setCode(newCode);
   };
@@ -621,7 +660,7 @@ const QclIdePage = () => {
     setParams((prev) => ({ ...prev, [paramName]: value }));
     setCode((currentCode) => {
       const regex = new RegExp(
-        `(\\(defparam\\s+'${paramName}'\\s+)([0-9.-]+)(\\))`,
+          `(\\(defparam\\s+${paramName}\\s+)([0-9.-]+)(\\))`,
       );
       return currentCode.replace(regex, `$1${value.toFixed(2)}$3`);
     });
@@ -639,8 +678,8 @@ const QclIdePage = () => {
         if (arg.startsWith("'")) {
           const paramName = arg.substring(1);
           return currentParams[paramName] !== undefined
-            ? currentParams[paramName]
-            : 0;
+              ? currentParams[paramName]
+              : 0;
         }
         return isNaN(parseFloat(arg)) ? arg : parseFloat(arg);
       });
@@ -681,7 +720,7 @@ const QclIdePage = () => {
 
     try {
       const resultJson = simulator.run_simulation(
-        JSON.stringify(circuitPayload),
+          JSON.stringify(circuitPayload),
       );
       return JSON.parse(resultJson);
     } catch (e) {
@@ -719,8 +758,8 @@ const QclIdePage = () => {
         setSimResult(result);
 
         const energy = result.probabilities
-          ? (result.probabilities[0] || 0) - (result.probabilities[1] || 0)
-          : 1;
+            ? (result.probabilities[0] || 0) - (result.probabilities[1] || 0)
+            : 1;
         const gradient = -Math.sin(thetaRef.current);
         const newTheta = thetaRef.current - 0.4 * gradient;
 
@@ -768,40 +807,40 @@ const QclIdePage = () => {
   };
 
   return (
-    <div className="p-4 h-full flex gap-4">
-      <div className="w-3/5 h-full flex flex-col gap-4">
-        <div className="flex-1 min-h-0">
-          <QclCodeEditor code={code} setCode={setCode} />
+      <div className="p-4 h-full flex gap-4">
+        <div className="w-3/5 h-full flex flex-col gap-4">
+          <div className="flex-1 min-h-0">
+            <QclCodeEditor code={code} setCode={setCode} />
+          </div>
+          <div className="flex-1 min-h-0">
+            <ExecutionPanel
+                logs={logs}
+                result={simResult}
+                onRun={handleRun}
+                onStop={handleStop}
+                isRunning={isRunning}
+                isMockMode={isMockMode}
+            />
+          </div>
         </div>
-        <div className="flex-1 min-h-0">
-          <ExecutionPanel
-            logs={logs}
-            result={simResult}
-            onRun={handleRun}
-            onStop={handleStop}
-            isRunning={isRunning}
-            isMockMode={isMockMode}
-          />
+        <div className="w-2/5 h-full flex flex-col gap-4">
+          <div className="flex-1 min-h-0">
+            <CircuitGrid
+                circuit={circuit}
+                onCircuitUpdate={handleCircuitUpdateFromGrid}
+            />
+          </div>
+          <div>
+            <GatePalette onDragStart={handleDragStart} />
+          </div>
+          <div className="flex-1 min-h-0">
+            <ParameterDashboard
+                params={params}
+                onParamChange={updateParameterValue}
+            />
+          </div>
         </div>
       </div>
-      <div className="w-2/5 h-full flex flex-col gap-4">
-        <div className="flex-1 min-h-0">
-          <CircuitGrid
-            circuit={circuit}
-            onCircuitUpdate={handleCircuitUpdateFromGrid}
-          />
-        </div>
-        <div>
-          <GatePalette onDragStart={handleDragStart} />
-        </div>
-        <div className="flex-1 min-h-0">
-          <ParameterDashboard
-            params={params}
-            onParamChange={updateParameterValue}
-          />
-        </div>
-      </div>
-    </div>
   );
 };
 
@@ -810,8 +849,8 @@ const QclIdePage = () => {
 //================================================================================
 export default function App() {
   return (
-    <>
-      <style>{`
+      <>
+        <style>{`
             html, body, #root {
                 height: 100%;
                 overflow: hidden;
@@ -823,9 +862,9 @@ export default function App() {
             ::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
             ::-webkit-scrollbar-thumb:hover { background: #64748b; }
         `}</style>
-      <main className="h-full">
-        <QclIdePage />
-      </main>
-    </>
+        <main className="h-full">
+          <QclIdePage />
+        </main>
+      </>
   );
 }
