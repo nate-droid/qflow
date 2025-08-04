@@ -17,12 +17,12 @@ Some of the capabilities include:
 
 This repo is a Rust Workspace containing several components that work together to provide a complete quantum dataflow solution:
 
-- **frontend/**: Simple HTML interface for viewing QFlow custom resources and pipeline status.
 - **qflow-backend/**: API backend serving pipeline and resource status to the frontend.
 - **qflow-operator/**: Kubernetes operator managing QFlow custom resources, running quantum jobs, and updating results.
 - **qflowc/**: Compiler for the QFlow DSL. Converts OpenQASM or QFlow DSL files into Kubernetes CRDs for use with the operator.
 - **qsim/**: Standalone quantum circuit simulator. Used by the operator, but can be run independently.
 - **qcl/**: A new crate for defining and running hybrid quantum-classical workflows using a simple, extensible DSL inspired by Lisp. Use this to experiment with variational algorithms, parameterized circuits, and classical control logic in a REPL or scriptable environment.
+- wasm-ui/: A web-based UI for QFlow, allowing users to design quantum circuits and workflows in the browser. It uses a WASM implementation of the simulator to run experiments directly in the browser.
 
 ## Quickstart
 
