@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from "react";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+// REMOVED: All Recharts imports and dependencies.
 
 // --- Helper Hooks & Utils ---
 
@@ -280,6 +280,24 @@ const ParameterDashboard = ({ params, onParamChange, isRunning }) => {
   );
 };
 
+// --- State Vector Display Component ---
+const StateVectorDisplay = ({ stateVector, basisStates }) => {
+  return (
+      <div className="space-y-2 font-mono text-sm max-h-40 overflow-y-auto pr-2">
+        {stateVector.map((amp, i) => (
+            <div key={i} className="flex items-center gap-4">
+              <span className="text-cyan-300 w-24">{basisStates[i]}</span>
+              <div className="flex-grow text-right">
+                <span className="text-slate-300">{amp.re.toFixed(4)}</span>
+                <span className="text-purple-400">{amp.im >= 0 ? ' + ' : ' - '}{Math.abs(amp.im).toFixed(4)}i</span>
+              </div>
+            </div>
+        ))}
+      </div>
+  );
+};
+
+
 const ExecutionPanel = ({
                           logs,
                           result,
@@ -289,15 +307,16 @@ const ExecutionPanel = ({
                           isMockMode,
                         }) => {
   const logEndRef = useRef(null);
+  const [activeTab, setActiveTab] = useState('probabilities');
 
   useEffect(() => {
     logEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [logs, result]);
 
   const basisStates = useMemo(() => {
-    if (!result || !result.probabilities) return [];
-    const numQubits = Math.log2(result.probabilities.length);
-    if (numQubits % 1 !== 0) return []; // Handle cases where length is not a power of 2
+    if (!result || (!result.probabilities && !result.state_vector)) return [];
+    const numQubits = Math.log2(result.probabilities?.length || result.state_vector?.length || 0);
+    if (numQubits % 1 !== 0) return [];
     return Array.from(
         { length: 1 << numQubits },
         (_, i) => `|${i.toString(2).padStart(numQubits, "0")}⟩`,
@@ -334,44 +353,55 @@ const ExecutionPanel = ({
             </button>
           </div>
         </div>
-        <div className="p-4 font-mono text-sm text-slate-300 overflow-y-auto flex-grow">
-          {logs.map((log, index) => (
-              <div
-                  key={index}
-                  className="whitespace-pre-wrap"
-                  dangerouslySetInnerHTML={{ __html: log }}
-              ></div>
-          ))}
-          {result && result.probabilities && (
-              <div className="mt-4 pt-4 border-t border-slate-700">
-                <h4 className="text-slate-200 font-bold mb-2">
-                  Final Simulation Results
-                </h4>
-                <div className="space-y-2 font-mono text-sm max-h-40 overflow-y-auto pr-2">
-                  {result.probabilities.map((prob, i) => (
-                      <div key={i} className="flex items-center gap-4">
-                        <span className="text-cyan-300 w-24">{basisStates[i]}</span>
-                        <div className="flex-grow bg-slate-700 rounded-full h-4">
-                          <div
-                              className="bg-cyan-500 h-4 rounded-full transition-all duration-500"
-                              style={{ width: `${prob * 100}%` }}
-                          />
-                        </div>
-                        <span className="w-20 text-right">
-                    {(prob * 100).toFixed(2)}%
-                  </span>
-                      </div>
-                  ))}
+        <div className="p-4 font-mono text-sm text-slate-300 flex-grow flex flex-col overflow-hidden">
+          <div className="flex-grow overflow-y-auto">
+            {logs.map((log, index) => (
+                <div
+                    key={index}
+                    className="whitespace-pre-wrap"
+                    dangerouslySetInnerHTML={{ __html: log }}
+                ></div>
+            ))}
+            <div ref={logEndRef} />
+          </div>
+
+          {result && (
+              <div className="flex-shrink-0 mt-4 pt-4 border-t border-slate-700">
+                <div className="flex border-b border-slate-700 mb-2">
+                  <button onClick={() => setActiveTab('probabilities')} className={`px-4 py-2 text-sm font-medium ${activeTab === 'probabilities' ? 'border-b-2 border-indigo-500 text-white' : 'text-slate-400'}`}>Probabilities</button>
+                  <button onClick={() => setActiveTab('state_vector')} className={`px-4 py-2 text-sm font-medium ${activeTab === 'state_vector' ? 'border-b-2 border-indigo-500 text-white' : 'text-slate-400'}`}>State Vector</button>
                 </div>
+
+                {activeTab === 'probabilities' && result.probabilities && (
+                    <div className="space-y-2 font-mono text-sm max-h-40 overflow-y-auto pr-2">
+                      {result.probabilities.map((prob, i) => (
+                          <div key={i} className="flex items-center gap-4">
+                            <span className="text-cyan-300 w-24">{basisStates[i]}</span>
+                            <div className="flex-grow bg-slate-700 rounded-full h-4">
+                              <div
+                                  className="bg-cyan-500 h-4 rounded-full transition-all duration-500"
+                                  style={{ width: `${prob * 100}%` }}
+                              />
+                            </div>
+                            <span className="w-20 text-right">
+                        {(prob * 100).toFixed(2)}%
+                      </span>
+                          </div>
+                      ))}
+                    </div>
+                )}
+
+                {activeTab === 'state_vector' && result.state_vector && (
+                    <StateVectorDisplay stateVector={result.state_vector} basisStates={basisStates} />
+                )}
               </div>
           )}
           {result && result.error && (
-              <div className="mt-4 pt-4 border-t border-slate-700">
+              <div className="flex-shrink-0 mt-4 pt-4 border-t border-slate-700">
                 <h4 className="text-red-400 font-bold mb-2">Simulation Error</h4>
                 <p className="text-red-300">{result.error}</p>
               </div>
           )}
-          <div ref={logEndRef} />
         </div>
       </div>
   );
@@ -384,7 +414,6 @@ const mockSimulator = {
       const numQubits = payload.numQubits || 1;
       const numOutcomes = 1 << numQubits;
 
-      // A simple mock logic: the 'theta' parameter influences the probability distribution.
       let theta = 0;
       if (payload.moments) {
         for (const moment of payload.moments) {
@@ -396,7 +425,6 @@ const mockSimulator = {
         }
       }
 
-      // Create a simple probability distribution based on theta
       const p0 = Math.cos(theta / 2) ** 2;
       const p1 = Math.sin(theta / 2) ** 2;
 
@@ -408,16 +436,15 @@ const mockSimulator = {
         probabilities[0] = 1;
       }
 
-      // Normalize in case of more than 2 outcomes
-      const sum = probabilities.reduce((a, b) => a + b, 0);
-      if (sum > 0) {
-        for(let i = 0; i < probabilities.length; i++) {
-          probabilities[i] /= sum;
-        }
+      const state_vector = Array(numOutcomes).fill({re: 0, im: 0});
+      if(numOutcomes >= 2) {
+        state_vector[0] = { re: Math.cos(theta/2), im: 0 };
+        state_vector[1] = { re: Math.sin(theta/2), im: 0 };
+      } else if (numOutcomes === 1) {
+        state_vector[0] = { re: 1, im: 0 };
       }
 
-
-      return JSON.stringify({ probabilities });
+      return JSON.stringify({ probabilities, state_vector });
     } catch (e) {
       return JSON.stringify({ error: "Failed to parse simulation payload." });
     }
@@ -663,34 +690,45 @@ const OptimizerControls = ({ optimizerConfig, setOptimizerConfig, isRunning }) =
   );
 };
 
-// --- Optimization Chart Component ---
+// --- NEW: Custom SVG Chart Component ---
 const OptimizationChart = ({ history }) => {
-  if (history.length === 0) {
+  if (history.length < 2) {
     return null;
   }
+
+  const width = 400;
+  const height = 200;
+  const margin = { top: 20, right: 20, bottom: 30, left: 40 };
+
+  const data = history.map(d => d.energy);
+  const min = Math.min(...data);
+  const max = Math.max(...data);
+
+  const x = (i) => margin.left + (i / (data.length - 1)) * (width - margin.left - margin.right);
+  const y = (value) => height - margin.bottom - ((value - min) / (max - min)) * (height - margin.top - margin.bottom);
+
+  const path = data.map((d, i) => `${i === 0 ? 'M' : 'L'} ${x(i)} ${y(d)}`).join(' ');
 
   return (
       <div className="bg-slate-900 rounded-lg border border-slate-700 p-4 h-full flex flex-col">
         <h3 className="text-base font-bold text-slate-200 mb-4">
           Optimization Progress
         </h3>
-        <div className="flex-grow">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={history} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-              <XAxis dataKey="iteration" stroke="#9ca3af" />
-              <YAxis domain={['auto', 'auto']} stroke="#9ca3af" />
-              <Tooltip
-                  contentStyle={{
-                    backgroundColor: '#1f2937',
-                    border: '1px solid #374151',
-                    color: '#e5e7eb'
-                  }}
-              />
-              <Legend />
-              <Line type="monotone" dataKey="energy" stroke="#8884d8" strokeWidth={2} dot={false} />
-            </LineChart>
-          </ResponsiveContainer>
+        <div className="flex-grow flex items-center justify-center">
+          <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full">
+            {/* Y-axis */}
+            <line x1={margin.left} y1={margin.top} x2={margin.left} y2={height - margin.bottom} stroke="#475569" />
+            <text x={margin.left - 10} y={margin.top + 5} fill="#9ca3af" fontSize="10" textAnchor="end">{max.toFixed(2)}</text>
+            <text x={margin.left - 10} y={height - margin.bottom} fill="#9ca3af" fontSize="10" textAnchor="end">{min.toFixed(2)}</text>
+
+            {/* X-axis */}
+            <line x1={margin.left} y1={height - margin.bottom} x2={width - margin.right} y2={height - margin.bottom} stroke="#475569" />
+            <text x={margin.left} y={height - margin.bottom + 15} fill="#9ca3af" fontSize="10" textAnchor="start">1</text>
+            <text x={width - margin.right} y={height - margin.bottom + 15} fill="#9ca3af" fontSize="10" textAnchor="end">{data.length}</text>
+
+            {/* Line path */}
+            <path d={path} stroke="#8884d8" strokeWidth="2" fill="none" />
+          </svg>
         </div>
       </div>
   );
@@ -1024,8 +1062,6 @@ export default function App() {
             ::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; } /* slate-600 */
             ::-webkit-scrollbar-thumb:hover { background: #64748b; } /* slate-500 */
         `}</style>
-        {/* Load Recharts dependency from CDN. This is the simple, original working method. */}
-        <script src="https://unpkg.com/recharts/umd/Recharts.min.js"></script>
         <main className="h-full">
           <QclIdePage />
         </main>
