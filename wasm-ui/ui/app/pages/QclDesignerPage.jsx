@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from "react";
+// REMOVED: Recharts import. The library is now loaded programmatically in the App component.
 
 // --- Helper Hooks & Utils ---
 
@@ -17,7 +18,7 @@ function useDebounce(value, delay) {
 
 function parseParameters(code) {
   const params = {};
-  const regex = /\(defparam\s+([a-zA-Z0-9_-]+)\s+([0-9.-]+)\)/g;
+  const regex = /\(defparam\s+'?([a-zA-Z0-9_-]+)'?\s+([0-9.-]+)\)/g;
   let match;
   while ((match = regex.exec(code)) !== null) {
     params[match[1]] = parseFloat(match[2]);
@@ -26,9 +27,8 @@ function parseParameters(code) {
 }
 
 function parseCircuit(code) {
-  // Updated regex to match: (defcircuit name (params...) (body...))
   const circuitRegex =
-      /\(defcircuit\s+([a-zA-Z0-9_-]+)\s+\(([\s\S]*?)\)\s+\(([\s\S]*)\)\s*\)/;
+      /\(defcircuit\s+'?([a-zA-Z0-9_-]+)'?\s+\(([\s\S]*?)\)\s+\(([\s\S]*)\)\s*\)/;
   const circuitMatch = code.match(circuitRegex);
 
   if (!circuitMatch) return null;
@@ -37,24 +37,19 @@ function parseCircuit(code) {
   const paramsRaw = circuitMatch[2];
   const body = circuitMatch[3];
 
-  // DEBUG: Print body string before gate parsing
-  console.log("DEBUG parseCircuit body string:", JSON.stringify(body));
-
-  // Parse params as array of names
   const params = paramsRaw
       .split(/\s+/)
-      .map((p) => p.trim())
+      .map((p) => p.trim().replace(/'/g, ''))
       .filter((p) => p.length > 0);
 
-  // Parse gates from body (allow for extra parentheses around gate list)
-  const gateRegex = /\(\s*\(?\s*([A-Z]+)\s+((?:[a-zA-Z0-9_.-]+\s*)+)\)?\s*\)/g;
+  const gateRegex = /\(\s*([A-Z]+)\s+((?:'?\w+\s*)+)\)/g;
   let gateMatch;
   const gates = [];
   let maxQubit = -1;
 
   while ((gateMatch = gateRegex.exec(body)) !== null) {
     const type = gateMatch[1];
-    const args = gateMatch[2].trim().split(/\s+/);
+    const args = gateMatch[2].trim().split(/\s+/).map(arg => arg.replace(/'/g, ''));
     const gateQubits = args
         .map((arg) => parseInt(arg, 10))
         .filter((num) => !isNaN(num));
@@ -79,7 +74,7 @@ function parseCircuit(code) {
 }
 
 //================================================================================
-// --- Reusable Circuit Components from CircuitSimulatorPage.jsx ---
+// --- Reusable Circuit Components ---
 //================================================================================
 
 const GateIcon = ({ gate, theta }) => {
@@ -89,6 +84,8 @@ const GateIcon = ({ gate, theta }) => {
     CX: "bg-blue-500 border-blue-600",
     CNOT: "bg-blue-500 border-blue-600",
     RX: "bg-purple-500 border-purple-600",
+    RY: "bg-purple-500 border-purple-600",
+    RZ: "bg-purple-500 border-purple-600",
   };
   const style = gateStyles[gate] || "bg-gray-400 border-gray-500";
   return (
@@ -116,6 +113,7 @@ const CnotTarget = () => (
     </div>
 );
 
+
 //================================================================================
 // --- QCL IDE COMPONENTS ---
 //================================================================================
@@ -136,7 +134,7 @@ const QclCodeEditor = ({ code, setCode, errorLine }) => {
       { type: "comment", regex: /;.*/, color: "#676e95" },
       {
         type: "command",
-        regex: /\b(defparam|defcircuit|run|loop|let|write-file)\b/,
+        regex: /\b(defparam|defcircuit|run-circuit|loop|let|write-file|cond|let\*)\b/g,
         color: "#c792ea",
       },
       { type: "symbol", regex: /'[a-zA-Z0-9_-]+/, color: "#f78c6c" },
@@ -154,7 +152,9 @@ const QclCodeEditor = ({ code, setCode, errorLine }) => {
       const parts = [];
       let lastIndex = 0;
 
-      for (const match of line.matchAll(combinedRegex)) {
+      const matches = Array.from(line.matchAll(combinedRegex));
+
+      for (const match of matches) {
         const tokenIndex = match.index;
         if (tokenIndex > lastIndex) {
           parts.push(line.substring(lastIndex, tokenIndex));
@@ -220,6 +220,9 @@ const QclCodeEditor = ({ code, setCode, errorLine }) => {
               onChange={(e) => setCode(e.target.value)}
               onScroll={handleScroll}
               spellCheck="false"
+              autoCapitalize="off"
+              autoComplete="off"
+              autoCorrect="off"
               className="absolute inset-0 p-4 pl-12 bg-transparent text-transparent caret-white resize-none border-0 outline-none overflow-auto whitespace-pre font-mono text-sm leading-6"
           />
         </div>
@@ -227,7 +230,7 @@ const QclCodeEditor = ({ code, setCode, errorLine }) => {
   );
 };
 
-const ParameterDashboard = ({ params, onParamChange }) => {
+const ParameterDashboard = ({ params, onParamChange, isRunning }) => {
   return (
       <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700 h-full flex flex-col">
         <h3 className="text-base font-bold text-slate-200 mb-4 border-b border-slate-600 pb-2">
@@ -239,7 +242,7 @@ const ParameterDashboard = ({ params, onParamChange }) => {
                 <p>
                   Define parameters using{" "}
                   <code className="bg-slate-700 p-1 rounded-md text-sm">
-                    (defparam name value)
+                    (defparam 'name value)
                   </code>
                   .
                 </p>
@@ -258,10 +261,11 @@ const ParameterDashboard = ({ params, onParamChange }) => {
                             max="6.28"
                             step="0.01"
                             value={value}
+                            disabled={isRunning}
                             onChange={(e) =>
                                 onParamChange(name, parseFloat(e.target.value))
                             }
-                            className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer"
+                            className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer disabled:opacity-50"
                         />
                         <span className="font-mono text-indigo-300 w-20 text-center bg-slate-700 py-1 rounded-md">
                     {value.toFixed(2)}
@@ -293,6 +297,7 @@ const ExecutionPanel = ({
   const basisStates = useMemo(() => {
     if (!result || !result.probabilities) return [];
     const numQubits = Math.log2(result.probabilities.length);
+    if (numQubits % 1 !== 0) return []; // Handle cases where length is not a power of 2
     return Array.from(
         { length: 1 << numQubits },
         (_, i) => `|${i.toString(2).padStart(numQubits, "0")}⟩`,
@@ -340,7 +345,7 @@ const ExecutionPanel = ({
           {result && result.probabilities && (
               <div className="mt-4 pt-4 border-t border-slate-700">
                 <h4 className="text-slate-200 font-bold mb-2">
-                  Simulation Results
+                  Final Simulation Results
                 </h4>
                 <div className="space-y-2 font-mono text-sm max-h-40 overflow-y-auto pr-2">
                   {result.probabilities.map((prob, i) => (
@@ -374,16 +379,53 @@ const ExecutionPanel = ({
 
 const mockSimulator = {
   run_simulation: (jsonPayload) => {
-    const payload = JSON.parse(jsonPayload);
-    const numQubits = payload.numQubits || 1;
-    const numOutcomes = 1 << numQubits;
-    const probabilities = Array(numOutcomes).fill(1 / numOutcomes);
-    return JSON.stringify({ probabilities });
+    try {
+      const payload = JSON.parse(jsonPayload);
+      const numQubits = payload.numQubits || 1;
+      const numOutcomes = 1 << numQubits;
+
+      // A simple mock logic: the 'theta' parameter influences the probability distribution.
+      let theta = 0;
+      if (payload.moments) {
+        for (const moment of payload.moments) {
+          for (const gate of moment) {
+            if (gate.theta !== undefined) {
+              theta = gate.theta;
+            }
+          }
+        }
+      }
+
+      // Create a simple probability distribution based on theta
+      const p0 = Math.cos(theta / 2) ** 2;
+      const p1 = Math.sin(theta / 2) ** 2;
+
+      const probabilities = Array(numOutcomes).fill(0);
+      if (numOutcomes >= 2) {
+        probabilities[0] = p0;
+        probabilities[1] = p1;
+      } else if (numOutcomes === 1) {
+        probabilities[0] = 1;
+      }
+
+      // Normalize in case of more than 2 outcomes
+      const sum = probabilities.reduce((a, b) => a + b, 0);
+      if (sum > 0) {
+        for(let i = 0; i < probabilities.length; i++) {
+          probabilities[i] /= sum;
+        }
+      }
+
+
+      return JSON.stringify({ probabilities });
+    } catch (e) {
+      return JSON.stringify({ error: "Failed to parse simulation payload." });
+    }
   },
 };
 
 const GatePalette = ({ onDragStart }) => {
-  const gates = ["H", "X", "CX", "RX"];
+  const gates = ["H", "X", "CNOT", "RX", "RY", "RZ"];
   return (
       <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700">
         <h3 className="text-base font-bold text-slate-200 mb-4 border-b border-slate-600 pb-2">
@@ -406,18 +448,6 @@ const GatePalette = ({ onDragStart }) => {
 };
 
 const CircuitGrid = ({ circuit, onCircuitUpdate }) => {
-  // Helper to export QCL code for the current circuit (new syntax)
-  const exportQclCode = () => {
-    if (!circuit) return "";
-    const paramsString =
-        circuit.params && circuit.params.length > 0
-            ? circuit.params.join(" ")
-            : "";
-    const gatesString = circuit.gates
-        .map((gate) => `    (${gate.type} ${gate.args.join(" ")})`)
-        .join("\n");
-    return `(defcircuit ${circuit.name} (${paramsString}) (\n${gatesString}\n))`;
-  };
   const numQubits = circuit ? circuit.numQubits : 1;
   const numMoments = 20;
   const cellHeight = 64;
@@ -434,10 +464,13 @@ const CircuitGrid = ({ circuit, onCircuitUpdate }) => {
       const involvedQubits = gate.qubits;
       if (involvedQubits.length === 0) return;
 
-      const momentIndex = Math.max(
-          0,
-          ...involvedQubits.map((q) => timeSlots[q]),
-      );
+      let momentIndex = 0;
+      for (const q of involvedQubits) {
+        if (timeSlots[q] > momentIndex) {
+          momentIndex = timeSlots[q];
+        }
+      }
+
       if (momentIndex >= numMoments) return;
 
       if (gate.type === "CX" || gate.type === "CNOT") {
@@ -467,14 +500,25 @@ const CircuitGrid = ({ circuit, onCircuitUpdate }) => {
 
     const newGates = [...circuit.gates];
 
-    if (gateType === "CX") {
+    if (gateType === "CNOT") {
+      // For simplicity, CNOT is added between the drop target and the qubit above.
+      // A more robust implementation would allow selecting both control and target.
       if (qubitIndex > 0) {
         newGates.push({
-          type: "CX",
+          type: "CNOT",
           args: [`${qubitIndex - 1}`, `${qubitIndex}`],
           qubits: [qubitIndex - 1, qubitIndex],
         });
       }
+    } else if (["RX", "RY", "RZ"].includes(gateType)) {
+      // Parameterized gates need a parameter. We'll add a placeholder.
+      // A real implementation might open a dialog to select the parameter.
+      const paramName = circuit.params[0] || 'theta';
+      newGates.push({
+        type: gateType,
+        args: [`'${paramName}`, `${qubitIndex}`],
+        qubits: [qubitIndex]
+      });
     } else {
       newGates.push({
         type: gateType,
@@ -498,6 +542,7 @@ const CircuitGrid = ({ circuit, onCircuitUpdate }) => {
           </h3>
           <div className="text-center text-slate-400 pt-10 flex-grow">
             <p>Define a circuit in the editor to enable the designer.</p>
+            <p className="text-sm mt-2">Example: <code className="bg-slate-700 p-1 rounded-md">(defcircuit 'name ('p) (...))</code></p>
           </div>
         </div>
     );
@@ -505,10 +550,13 @@ const CircuitGrid = ({ circuit, onCircuitUpdate }) => {
 
   return (
       <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700 h-full flex flex-col">
-        <h3 className="text-base font-bold text-slate-200 mb-4 border-b border-slate-600 pb-2">
-          Circuit Designer:{" "}
-          <span className="font-mono text-indigo-300">{circuit.name}</span>
-        </h3>
+        <div className="flex justify-between items-center mb-4 border-b border-slate-600 pb-2">
+          <h3 className="text-base font-bold text-slate-200">
+            Circuit Designer:{" "}
+            <span className="font-mono text-indigo-300">{circuit.name}</span>
+          </h3>
+          <span className="text-sm text-slate-400">{circuit.numQubits} Qubits</span>
+        </div>
 
         <div className="overflow-auto">
           <div
@@ -516,22 +564,26 @@ const CircuitGrid = ({ circuit, onCircuitUpdate }) => {
               style={{ minWidth: `${numMoments * cellWidth}px` }}
           >
             {Array.from({ length: numQubits }).map((_, qIndex) => (
-                <div
-                    key={`line-${qIndex}`}
-                    className="absolute h-0.5 bg-gray-500"
-                    style={{
-                      top: `${qIndex * cellHeight + 31.5}px`,
-                      left: "16px",
-                      right: "16px",
-                      zIndex: 0,
-                    }}
-                />
+                <div key={`line-container-${qIndex}`} className="flex items-center" style={{height: `${cellHeight}px`}}>
+                  <span className="text-xs text-slate-400 w-8 text-center font-mono">q{qIndex}</span>
+                  <div
+                      key={`line-${qIndex}`}
+                      className="absolute h-0.5 bg-gray-500"
+                      style={{
+                        top: `${qIndex * cellHeight + (cellHeight/2) - 1}px`,
+                        left: "40px",
+                        right: "16px",
+                        zIndex: 0,
+                      }}
+                  />
+                </div>
             ))}
             <div
-                className="relative z-10 grid"
+                className="absolute top-0 z-10 grid"
                 style={{
                   gridTemplateColumns: `repeat(${numMoments}, ${cellWidth}px)`,
                   gridTemplateRows: `repeat(${numQubits}, ${cellHeight}px)`,
+                  left: '40px'
                 }}
             >
               {Array.from({ length: numQubits * numMoments }).map((_, i) => {
@@ -569,6 +621,95 @@ const CircuitGrid = ({ circuit, onCircuitUpdate }) => {
   );
 };
 
+// --- Optimizer Controls Component ---
+const OptimizerControls = ({ optimizerConfig, setOptimizerConfig, isRunning }) => {
+  return (
+      <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700">
+        <h3 className="text-base font-bold text-slate-200 mb-4 border-b border-slate-600 pb-2">
+          Optimizer Settings
+        </h3>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-1">
+              Algorithm
+            </label>
+            <select
+                value={optimizerConfig.algorithm}
+                disabled={isRunning}
+                onChange={(e) => setOptimizerConfig(c => ({...c, algorithm: e.target.value}))}
+                className="w-full bg-slate-700 border border-slate-600 rounded-md p-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
+            >
+              <option value="gradient_descent">Gradient Descent</option>
+            </select>
+          </div>
+          <div>
+            <label htmlFor="learning-rate" className="block text-sm font-medium text-slate-300 mb-1">
+              Learning Rate ({optimizerConfig.learningRate})
+            </label>
+            <input
+                id="learning-rate"
+                type="range"
+                min="0.01"
+                max="1.0"
+                step="0.01"
+                disabled={isRunning}
+                value={optimizerConfig.learningRate}
+                onChange={(e) => setOptimizerConfig(c => ({...c, learningRate: parseFloat(e.target.value)}))}
+                className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer disabled:opacity-50"
+            />
+          </div>
+        </div>
+      </div>
+  );
+};
+
+// --- Optimization Chart Component ---
+const OptimizationChart = ({ history }) => {
+  // This component assumes the Recharts library is loaded before it renders.
+  if (history.length === 0) {
+    return null;
+  }
+
+  // A simple safeguard in case the library isn't on the window object for some reason.
+  if (typeof window.Recharts === 'undefined') {
+    return (
+        <div className="bg-slate-900 rounded-lg border border-slate-700 p-4 h-full flex items-center justify-center">
+          <p className="text-slate-400">Chart library not available.</p>
+        </div>
+    );
+  }
+
+  // Destructure components from the global Recharts object
+  const { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } = window.Recharts;
+
+  return (
+      <div className="bg-slate-900 rounded-lg border border-slate-700 p-4 h-full flex flex-col">
+        <h3 className="text-base font-bold text-slate-200 mb-4">
+          Optimization Progress
+        </h3>
+        <div className="flex-grow">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={history} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+              <XAxis dataKey="iteration" stroke="#9ca3af" />
+              <YAxis domain={['auto', 'auto']} stroke="#9ca3af" />
+              <Tooltip
+                  contentStyle={{
+                    backgroundColor: '#1f2937',
+                    border: '1px solid #374151',
+                    color: '#e5e7eb'
+                  }}
+              />
+              <Legend />
+              <Line type="monotone" dataKey="energy" stroke="#8884d8" strokeWidth={2} dot={false} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+  );
+}
+
+
 /**
  * The main page for the QCL IDE, combining all components.
  */
@@ -576,17 +717,21 @@ const QclIdePage = () => {
   const initialCode = `
 ; Welcome to the Visual QCL IDE!
 ; This example demonstrates a VQE-like optimization loop.
-; Press "Run" to watch theta update automatically.
+; 1. Define a parameter to optimize.
+; 2. Define a circuit that uses it.
+; 3. Use 'loop' to run the optimization.
+; Press "Run" to watch the chart and parameters update.
 
-(defparam theta 1.57)
+(defparam 'theta 1.57)
 
-(defcircuit vqe_ansatz (theta) (
-    ((RX theta 0))
+(defcircuit 'vqe_ansatz ('theta) (
+  (RX 'theta 0)
+  (H 1)
+  (CNOT 0 1)
 ))
 
-(loop 20 (
-    (let theta) ; In a real scenario, an optimizer would update this.
-    (run vqe_ansatz)
+(loop 50 (
+  (run-circuit (vqe_ansatz 'theta))
 ))
     `.trim();
 
@@ -596,39 +741,43 @@ const QclIdePage = () => {
   const [logs, setLogs] = useState([]);
   const [simResult, setSimResult] = useState(null);
   const [isRunning, setIsRunning] = useState(false);
-
-  // DEBUG: Log parseCircuit output
-  useEffect(() => {
-    const parsed = parseCircuit(code);
-    console.log("DEBUG parseCircuit output:", parsed);
-  }, [code]);
-
+  const [isMockMode, setIsMockMode] = useState(true); // Default to mock mode
   const [wasm, setWasm] = useState(null);
-  const [isMockMode, setIsMockMode] = useState(false);
+
+  // --- State for optimizer and history ---
+  const [optimizerConfig, setOptimizerConfig] = useState({
+    algorithm: 'gradient_descent',
+    learningRate: 0.4
+  });
+  const [optimizationHistory, setOptimizationHistory] = useState([]);
+
   const loopIntervalRef = useRef(null);
-  const thetaRef = useRef(0);
+  const paramStateRef = useRef({});
 
   const debouncedCode = useDebounce(code, 500);
 
+  // This effect attempts to load WASM but falls back to mock mode
   useEffect(() => {
-    const loadAndInitializeWasm = async () => {
+    const loadWasm = async () => {
       try {
+        // This will fail in this environment, triggering the catch block
         const wasmModule = await import("quantum-simulator-wasm");
         await wasmModule.default();
         setWasm(wasmModule);
-        setLogs(["> Real quantum simulator loaded successfully."]);
+        setIsMockMode(false);
+        setLogs(prev => [...prev, "> Real quantum simulator loaded."]);
       } catch (err) {
-        console.error("Error loading and initializing WASM module:", err);
         setIsMockMode(true);
-        setLogs([]);
+        setLogs(prev => [...prev, "> Using mock simulator. Real engine not found."]);
       }
     };
-    loadAndInitializeWasm();
+    loadWasm();
   }, []);
 
   useEffect(() => {
     const newParams = parseParameters(debouncedCode);
     setParams(newParams);
+    paramStateRef.current = newParams;
     const newCircuit = parseCircuit(debouncedCode);
     setCircuit(newCircuit);
   }, [debouncedCode]);
@@ -636,92 +785,78 @@ const QclIdePage = () => {
   const handleCircuitUpdateFromGrid = (updatedCircuit) => {
     setCircuit(updatedCircuit);
 
+    const paramsString = updatedCircuit.params.join(" ");
     const gatesString = updatedCircuit.gates
-        .map((gate) => {
-          return `    (${gate.type} ${gate.args.join(" ")})`;
-        })
+        .map(gate => `  (${gate.type} ${gate.args.join(" ")})`)
         .join("\n");
 
-    // Build params string for circuit
-    const paramsString =
-        updatedCircuit.params && updatedCircuit.params.length > 0
-            ? updatedCircuit.params.join(" ")
-            : "";
-
-    // Replace old circuit definition with new syntax
     const newCode = code.replace(
-        /\(defcircuit\s+[a-zA-Z0-9_-]+\s+\([^\)]*\)\s+\([^\)]*\)\s*\)/,
-        `(defcircuit ${updatedCircuit.name} (${paramsString}) (\n${gatesString}\n))`,
+        /\(defcircuit\s+'?\w+'?\s+\([\s\S]*?\)\s+\([\s\S]*?\)\s*\)/,
+        `(defcircuit '${updatedCircuit.name} (${paramsString}) (\n${gatesString}\n))`
     );
     setCode(newCode);
   };
 
   const updateParameterValue = (paramName, value) => {
-    setParams((prev) => ({ ...prev, [paramName]: value }));
+    const newParams = { ...paramStateRef.current, [paramName]: value };
+    paramStateRef.current = newParams;
+    setParams(newParams); // Update UI
+
     setCode((currentCode) => {
       const regex = new RegExp(
-          `(\\(defparam\\s+${paramName}\\s+)([0-9.-]+)(\\))`,
+          `(\\(defparam\\s+'${paramName}'\\s+)([0-9.-]+)(\\))`,
       );
-      return currentCode.replace(regex, `$1${value.toFixed(2)}$3`);
+      return currentCode.replace(regex, `$1${value.toFixed(4)}$3`);
     });
   };
 
   const runSingleSimulation = (currentParams) => {
     const simulator = wasm || mockSimulator;
-    if (!circuit) return;
+    if (!circuit) return { error: "No valid circuit defined." };
+
+    const resolvedCircuit = {
+      numQubits: circuit.numQubits,
+      moments: []
+    };
 
     const timeSlots = Array(circuit.numQubits).fill(0);
-    const moments = [];
 
-    circuit.gates.forEach((gate) => {
-      const resolvedArgs = gate.args.map((arg) => {
-        if (arg.startsWith("'")) {
-          const paramName = arg.substring(1);
-          return currentParams[paramName] !== undefined
-              ? currentParams[paramName]
-              : 0;
+    for (const gate of circuit.gates) {
+      const resolvedArgs = gate.args.map(arg => {
+        if (currentParams[arg] !== undefined) {
+          return currentParams[arg];
         }
         return isNaN(parseFloat(arg)) ? arg : parseFloat(arg);
       });
 
       const gateQubits = gate.qubits;
-      const momentIndex = Math.max(0, ...gateQubits.map((q) => timeSlots[q]));
+      let momentIndex = 0;
+      for (const q of gateQubits) {
+        if (timeSlots[q] > momentIndex) {
+          momentIndex = timeSlots[q];
+        }
+      }
 
-      while (moments.length <= momentIndex) {
-        moments.push([]);
+      while (resolvedCircuit.moments.length <= momentIndex) {
+        resolvedCircuit.moments.push([]);
       }
 
       let simGate;
-      if (gate.type === "CX" || gate.type === "CNOT") {
-        simGate = {
-          type: "CNOT",
-          control: gateQubits[0],
-          target: gateQubits[1],
-        };
+      if (gate.type === "CNOT") {
+        simGate = { type: "CNOT", control: gateQubits[0], target: gateQubits[1] };
       } else if (["RX", "RY", "RZ"].includes(gate.type)) {
-        simGate = {
-          type: gate.type,
-          qubit: gateQubits[0],
-          theta: resolvedArgs.find((a) => typeof a === "number"),
-        };
+        simGate = { type: "gate.type", qubit: gateQubits[0], theta: resolvedArgs.find(a => typeof a === 'number') };
       } else {
         simGate = { type: gate.type, qubit: gateQubits[0] };
       }
-      moments[momentIndex].push(simGate);
+      resolvedCircuit.moments[momentIndex].push(simGate);
 
       const endTimeSlot = momentIndex + 1;
-      gateQubits.forEach((q) => (timeSlots[q] = endTimeSlot));
-    });
-
-    const circuitPayload = {
-      numQubits: circuit.numQubits,
-      moments: moments.filter((m) => m.length > 0),
-    };
+      gateQubits.forEach(q => timeSlots[q] = endTimeSlot);
+    }
 
     try {
-      const resultJson = simulator.run_simulation(
-          JSON.stringify(circuitPayload),
-      );
+      const resultJson = simulator.run_simulation(JSON.stringify(resolvedCircuit));
       return JSON.parse(resultJson);
     } catch (e) {
       console.error("Error running simulation:", e);
@@ -738,12 +873,14 @@ const QclIdePage = () => {
       const iterations = parseInt(loopMatch[1], 10);
       let currentIteration = 0;
 
-      thetaRef.current = params.theta;
+      paramStateRef.current = parseParameters(code);
 
       setIsRunning(true);
       setLogs([
-        `<span class="text-yellow-400">[Workflow]</span> Starting loop for ${iterations} iterations...`,
+        `<span class="text-yellow-400">[Workflow]</span> Starting optimization loop for ${iterations} iterations...`,
+        `<span class="text-yellow-400">[Optimizer]</span> Algorithm: ${optimizerConfig.algorithm}, LR: ${optimizerConfig.learningRate}`
       ]);
+      setOptimizationHistory([]);
 
       loopIntervalRef.current = setInterval(() => {
         if (currentIteration >= iterations) {
@@ -751,27 +888,49 @@ const QclIdePage = () => {
           return;
         }
 
-        const result = runSingleSimulation({
-          ...params,
-          theta: thetaRef.current,
-        });
-        setSimResult(result);
+        const result = runSingleSimulation(paramStateRef.current);
 
-        const energy = result.probabilities
-            ? (result.probabilities[0] || 0) - (result.probabilities[1] || 0)
-            : 1;
-        const gradient = -Math.sin(thetaRef.current);
-        const newTheta = thetaRef.current - 0.4 * gradient;
+        if (result.error) {
+          setLogs(prev => [...prev, `<span class="text-red-400">[Error]</span> ${result.error}`]);
+          handleStop();
+          return;
+        }
 
-        setLogs((prev) => [
-          ...prev,
-          `[Iter ${currentIteration + 1}/${iterations}] Energy: ${energy.toFixed(3)}, New Theta: ${newTheta.toFixed(3)}`,
-        ]);
+        // Simple cost function: E = <Z> = P(0) - P(1)
+        const energy = (result.probabilities[0] || 0) - (result.probabilities[1] || 0);
 
-        updateParameterValue("theta", newTheta);
-        thetaRef.current = newTheta;
+        setOptimizationHistory(prev => [...prev, { iteration: currentIteration + 1, energy: energy }]);
+
+        // Gradient Descent Logic
+        if (optimizerConfig.algorithm === 'gradient_descent') {
+          Object.keys(paramStateRef.current).forEach(paramName => {
+            // Approximate gradient using parameter-shift rule for RX gates
+            // grad(E) = (E(theta + pi/2) - E(theta - pi/2)) / 2
+            const paramValue = paramStateRef.current[paramName];
+
+            const forwardParams = {...paramStateRef.current, [paramName]: paramValue + Math.PI / 2};
+            const forwardResult = runSingleSimulation(forwardParams);
+            const energyForward = (forwardResult.probabilities[0] || 0) - (forwardResult.probabilities[1] || 0);
+
+            const backwardParams = {...paramStateRef.current, [paramName]: paramValue - Math.PI / 2};
+            const backwardResult = runSingleSimulation(backwardParams);
+            const energyBackward = (backwardResult.probabilities[0] || 0) - (backwardResult.probabilities[1] || 0);
+
+            const gradient = (energyForward - energyBackward) / 2;
+
+            const newParamValue = paramValue - optimizerConfig.learningRate * gradient;
+
+            setLogs((prev) => [
+              ...prev.slice(0, 50), // Keep log history from growing too large
+              `[Iter ${currentIteration + 1}] Param: ${paramName}, E: ${energy.toFixed(4)}, Grad: ${gradient.toFixed(4)}, New: ${newParamValue.toFixed(4)}`,
+            ]);
+
+            updateParameterValue(paramName, newParamValue);
+          });
+        }
+
         currentIteration++;
-      }, 700);
+      }, 500);
     } else {
       setIsRunning(true);
       setSimResult(null);
@@ -796,6 +955,9 @@ const QclIdePage = () => {
       loopIntervalRef.current = null;
     }
     setIsRunning(false);
+    const finalParams = paramStateRef.current;
+    const finalResult = runSingleSimulation(finalParams);
+    setSimResult(finalResult);
     setLogs((prev) => [
       ...prev,
       `<span class="text-yellow-400">[Workflow]</span> Loop finished or stopped.`,
@@ -808,11 +970,11 @@ const QclIdePage = () => {
 
   return (
       <div className="p-4 h-full flex gap-4">
-        <div className="w-3/5 h-full flex flex-col gap-4">
-          <div className="flex-1 min-h-0">
+        <div className="w-[60%] h-full flex flex-col gap-4">
+          <div className="h-[55%] min-h-0">
             <QclCodeEditor code={code} setCode={setCode} />
           </div>
-          <div className="flex-1 min-h-0">
+          <div className="h-[45%] min-h-0">
             <ExecutionPanel
                 logs={logs}
                 result={simResult}
@@ -823,20 +985,29 @@ const QclIdePage = () => {
             />
           </div>
         </div>
-        <div className="w-2/5 h-full flex flex-col gap-4">
-          <div className="flex-1 min-h-0">
+        <div className="w-[40%] h-full flex flex-col gap-4">
+          <div className="h-[45%] min-h-0">
             <CircuitGrid
                 circuit={circuit}
                 onCircuitUpdate={handleCircuitUpdateFromGrid}
             />
           </div>
-          <div>
+          <div className="grid grid-cols-2 gap-4">
             <GatePalette onDragStart={handleDragStart} />
+            <OptimizerControls
+                optimizerConfig={optimizerConfig}
+                setOptimizerConfig={setOptimizerConfig}
+                isRunning={isRunning}
+            />
           </div>
-          <div className="flex-1 min-h-0">
+          <div className="h-[calc(55%-1rem-1rem-120px)] min-h-[200px]">
+            <OptimizationChart history={optimizationHistory} />
+          </div>
+          <div className="flex-grow min-h-0">
             <ParameterDashboard
                 params={params}
                 onParamChange={updateParameterValue}
+                isRunning={isRunning}
             />
           </div>
         </div>
@@ -845,25 +1016,71 @@ const QclIdePage = () => {
 };
 
 //================================================================================
-// --- APP LAYOUT & ROUTER (Simplified for this example) ---
+// --- APP LAYOUT & ROUTER ---
 //================================================================================
 export default function App() {
+  // FIX: State to track if the external script is loaded
+  const [isLibraryReady, setLibraryReady] = useState(false);
+
+  useEffect(() => {
+    // If the library is already on the window object, we're good to go.
+    if (window.Recharts) {
+      setLibraryReady(true);
+      return;
+    }
+
+    // Create a script element.
+    const script = document.createElement('script');
+    // FIX: Using a more reliable CDN link for Recharts
+    script.src = "https://cdn.jsdelivr.net/npm/recharts@2.12.7/umd/Recharts.min.js";
+    script.async = true;
+
+    // Define what happens when the script finishes loading.
+    script.onload = () => {
+      setLibraryReady(true);
+    };
+
+    // Define what happens if the script fails to load.
+    script.onerror = () => {
+      console.error("Failed to load the Recharts script from CDN.");
+    };
+
+    // Append the script to the document body to start loading it.
+    document.body.appendChild(script);
+
+    // Cleanup function to remove the script if the App component unmounts.
+    return () => {
+      document.body.removeChild(script);
+    };
+  }, []); // The empty dependency array ensures this effect runs only once.
+
   return (
       <>
         <style>{`
+            /* Using a more modern font and ensuring full height */
+            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
             html, body, #root {
                 height: 100%;
                 overflow: hidden;
-                background-color: #020617;
-                color: #e2e8f0;
+                background-color: #020617; /* slate-950 */
+                color: #e2e8f0; /* slate-200 */
+                font-family: 'Inter', sans-serif;
             }
+            /* Custom scrollbar styling */
             ::-webkit-scrollbar { width: 8px; height: 8px; }
-            ::-webkit-scrollbar-track { background: #1e293b; border-radius: 4px; }
-            ::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
-            ::-webkit-scrollbar-thumb:hover { background: #64748b; }
+            ::-webkit-scrollbar-track { background: #1e293b; border-radius: 4px; } /* slate-800 */
+            ::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; } /* slate-600 */
+            ::-webkit-scrollbar-thumb:hover { background: #64748b; } /* slate-500 */
         `}</style>
+        {/* The script tag is no longer rendered here. It is added programmatically. */}
         <main className="h-full">
-          <QclIdePage />
+          {isLibraryReady ? (
+              <QclIdePage />
+          ) : (
+              <div className="w-full h-full flex items-center justify-center bg-slate-950">
+                <p className="text-slate-400 text-lg animate-pulse">Loading Components...</p>
+              </div>
+          )}
         </main>
       </>
   );
