@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from "react";
-// REMOVED: Recharts import. The library is now loaded programmatically in the App component.
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 // --- Helper Hooks & Utils ---
 
@@ -665,22 +665,9 @@ const OptimizerControls = ({ optimizerConfig, setOptimizerConfig, isRunning }) =
 
 // --- Optimization Chart Component ---
 const OptimizationChart = ({ history }) => {
-  // This component assumes the Recharts library is loaded before it renders.
   if (history.length === 0) {
     return null;
   }
-
-  // A simple safeguard in case the library isn't on the window object for some reason.
-  if (typeof window.Recharts === 'undefined') {
-    return (
-        <div className="bg-slate-900 rounded-lg border border-slate-700 p-4 h-full flex items-center justify-center">
-          <p className="text-slate-400">Chart library not available.</p>
-        </div>
-    );
-  }
-
-  // Destructure components from the global Recharts object
-  const { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } = window.Recharts;
 
   return (
       <div className="bg-slate-900 rounded-lg border border-slate-700 p-4 h-full flex flex-col">
@@ -845,7 +832,7 @@ const QclIdePage = () => {
       if (gate.type === "CNOT") {
         simGate = { type: "CNOT", control: gateQubits[0], target: gateQubits[1] };
       } else if (["RX", "RY", "RZ"].includes(gate.type)) {
-        simGate = { type: "gate.type", qubit: gateQubits[0], theta: resolvedArgs.find(a => typeof a === 'number') };
+        simGate = { type: gate.type, qubit: gateQubits[0], theta: resolvedArgs.find(a => typeof a === 'number') };
       } else {
         simGate = { type: gate.type, qubit: gateQubits[0] };
       }
@@ -1019,41 +1006,6 @@ const QclIdePage = () => {
 // --- APP LAYOUT & ROUTER ---
 //================================================================================
 export default function App() {
-  // FIX: State to track if the external script is loaded
-  const [isLibraryReady, setLibraryReady] = useState(false);
-
-  useEffect(() => {
-    // If the library is already on the window object, we're good to go.
-    if (window.Recharts) {
-      setLibraryReady(true);
-      return;
-    }
-
-    // Create a script element.
-    const script = document.createElement('script');
-    // FIX: Using a more reliable CDN link for Recharts
-    script.src = "https://cdn.jsdelivr.net/npm/recharts@2.12.7/umd/Recharts.min.js";
-    script.async = true;
-
-    // Define what happens when the script finishes loading.
-    script.onload = () => {
-      setLibraryReady(true);
-    };
-
-    // Define what happens if the script fails to load.
-    script.onerror = () => {
-      console.error("Failed to load the Recharts script from CDN.");
-    };
-
-    // Append the script to the document body to start loading it.
-    document.body.appendChild(script);
-
-    // Cleanup function to remove the script if the App component unmounts.
-    return () => {
-      document.body.removeChild(script);
-    };
-  }, []); // The empty dependency array ensures this effect runs only once.
-
   return (
       <>
         <style>{`
@@ -1072,15 +1024,10 @@ export default function App() {
             ::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; } /* slate-600 */
             ::-webkit-scrollbar-thumb:hover { background: #64748b; } /* slate-500 */
         `}</style>
-        {/* The script tag is no longer rendered here. It is added programmatically. */}
+        {/* Load Recharts dependency from CDN. This is the simple, original working method. */}
+        <script src="https://unpkg.com/recharts/umd/Recharts.min.js"></script>
         <main className="h-full">
-          {isLibraryReady ? (
-              <QclIdePage />
-          ) : (
-              <div className="w-full h-full flex items-center justify-center bg-slate-950">
-                <p className="text-slate-400 text-lg animate-pulse">Loading Components...</p>
-              </div>
-          )}
+          <QclIdePage />
         </main>
       </>
   );
