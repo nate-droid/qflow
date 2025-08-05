@@ -13,6 +13,18 @@ Some of the capabilities include:
 - **Compiler**: Convert OpenQASM or QFlow DSL files into Kubernetes CRDs for use with the operator.
 - **Quantum Circuit Born Machines (QCBM)**: Initial support for running QCBM experiments.
 
+## Status
+
+Now that the first "shadow" of the project is starting to take shape, I've begun some refactoring to simplify things a bit.
+I've hacked out the previous "ui" directory, and am using a the directory `wasm-ui/` to start fresh with a more modern
+approach to the frontend. The goal is to use React and a WASM implementation of the simulator to allow users to run
+experiments directly in the browser.
+
+I am also overhauling the "QCL" language to be more standalone so that we don't get too many tightly coupled types. This 
+is being worked on in a separate repo. Once it stabilizes, I will look into either pulling it in here directly, or publish
+it as a complete standalone crate that can be used in other projects. (It depends on how "general purpose" I want to try 
+and make it)
+
 ## Project Structure
 
 This repo is a Rust Workspace containing several components that work together to provide a complete quantum dataflow solution:
