@@ -425,24 +425,22 @@ const mockSimulator = {
         }
       }
 
-      const p0 = Math.cos(theta / 2) ** 2;
-      const p1 = Math.sin(theta / 2) ** 2;
+      // FIX: Create a more realistic state vector for multi-qubit systems
+      const state_vector = Array.from({ length: numOutcomes }, () => ({re: 0, im: 0}));
 
-      const probabilities = Array(numOutcomes).fill(0);
-      if (numOutcomes >= 2) {
-        probabilities[0] = p0;
-        probabilities[1] = p1;
-      } else if (numOutcomes === 1) {
-        probabilities[0] = 1;
-      }
-
-      const state_vector = Array(numOutcomes).fill({re: 0, im: 0});
-      if(numOutcomes >= 2) {
+      if (numQubits === 1) {
         state_vector[0] = { re: Math.cos(theta/2), im: 0 };
         state_vector[1] = { re: Math.sin(theta/2), im: 0 };
-      } else if (numOutcomes === 1) {
+      } else if (numQubits === 2) {
+        // Create a Bell state modulated by theta
+        state_vector[0] = { re: Math.cos(theta/2), im: 0 };
+        state_vector[3] = { re: Math.sin(theta/2), im: 0 };
+      } else {
+        // Default for > 2 qubits, just the ground state
         state_vector[0] = { re: 1, im: 0 };
       }
+
+      const probabilities = state_vector.map(amp => amp.re * amp.re + amp.im * amp.im);
 
       return JSON.stringify({ probabilities, state_vector });
     } catch (e) {
@@ -690,7 +688,7 @@ const OptimizerControls = ({ optimizerConfig, setOptimizerConfig, isRunning }) =
   );
 };
 
-// --- NEW: Custom SVG Chart Component ---
+// --- Custom SVG Chart Component ---
 const OptimizationChart = ({ history }) => {
   if (history.length < 2) {
     return null;
@@ -994,12 +992,13 @@ const QclIdePage = () => {
   };
 
   return (
-      <div className="p-4 h-full flex gap-4">
-        <div className="w-[60%] h-full flex flex-col gap-4">
-          <div className="h-[55%] min-h-0">
+      <div className="p-4 h-full grid grid-cols-12 gap-4">
+        {/* Column 1: Code Editor & Execution Panel */}
+        <div className="col-span-5 h-full flex flex-col gap-4">
+          <div className="h-3/5">
             <QclCodeEditor code={code} setCode={setCode} />
           </div>
-          <div className="h-[45%] min-h-0">
+          <div className="h-2/5">
             <ExecutionPanel
                 logs={logs}
                 result={simResult}
@@ -1010,22 +1009,30 @@ const QclIdePage = () => {
             />
           </div>
         </div>
-        <div className="w-[40%] h-full flex flex-col gap-4">
-          <div className="h-[45%] min-h-0">
+
+        {/* Column 2: Circuit Designer & Palette */}
+        <div className="col-span-4 h-full flex flex-col gap-4">
+          <div className="flex-grow min-h-0">
             <CircuitGrid
                 circuit={circuit}
                 onCircuitUpdate={handleCircuitUpdateFromGrid}
             />
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="flex-shrink-0">
             <GatePalette onDragStart={handleDragStart} />
+          </div>
+        </div>
+
+        {/* Column 3: Controls & Results */}
+        <div className="col-span-3 h-full flex flex-col gap-4">
+          <div className="flex-shrink-0">
             <OptimizerControls
                 optimizerConfig={optimizerConfig}
                 setOptimizerConfig={setOptimizerConfig}
                 isRunning={isRunning}
             />
           </div>
-          <div className="h-[calc(55%-1rem-1rem-120px)] min-h-[200px]">
+          <div className="flex-shrink-0 h-[240px]">
             <OptimizationChart history={optimizationHistory} />
           </div>
           <div className="flex-grow min-h-0">
