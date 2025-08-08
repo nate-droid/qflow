@@ -8,10 +8,43 @@ use qsim::{Gate, StateVector};
 
 const EPSILON: f64 = 1e-12;
 
+/// A trait for optimization algorithms.
 pub trait Optimizer {
+    /// Updates the parameters based on the gradients.
+    ///
+    /// # Arguments
+    /// * `params` - The parameters to be updated.
+    /// * `grads` - The gradients of the loss function with respect to the parameters.
     fn update(&mut self, params: &mut [f64], grads: &[f64]);
 }
 
+/// A simple Gradient Descent optimizer.
+pub struct GradientDescentOptimizer {
+    learning_rate: f64,
+}
+
+impl GradientDescentOptimizer {
+    /// Creates a new GradientDescentOptimizer.
+    ///
+    /// # Arguments
+    /// * `learning_rate` - The step size for each update.
+    pub fn new(learning_rate: f64) -> Self {
+        Self { learning_rate }
+    }
+}
+
+impl Optimizer for GradientDescentOptimizer {
+    /// Updates parameters using the gradient descent rule.
+    fn update(&mut self, params: &mut [f64], grads: &[f64]) {
+        for i in 0..params.len() {
+            params[i] -= self.learning_rate * grads[i];
+        }
+    }
+}
+
+// --- End of New Code ---
+
+/// An implementation of the Adam optimizer.
 pub struct AdamOptimizer {
     learning_rate: f64,
     beta1: f64,
@@ -211,7 +244,7 @@ where
                     let term_target: f64 = target_vecs.iter().map(|x| kernel(x, &vec_z)).sum();
                     let d_mmd_dp_z = 2.0
                         * (term_model / model_vecs.len() as f64
-                            - term_target / target_vecs.len() as f64);
+                        - term_target / target_vecs.len() as f64);
 
                     let p_plus_z = dist_plus.get(&bitstring_z).unwrap_or(&0.0);
                     let p_minus_z = dist_minus.get(&bitstring_z).unwrap_or(&0.0);
@@ -320,5 +353,32 @@ mod tests {
         assert!((p11 - 0.5).abs() < 0.1, "P('11') should be ~0.5");
         assert!(*p01 < 0.1, "P('01') should be ~0");
         assert!(*p10 < 0.1, "P('10') should be ~0");
+    }
+
+    #[test]
+    fn test_qcbm_training_with_gradient_descent() {
+        let target_angle = (0.75_f64).sqrt().asin() * 2.0;
+        let training_data = vec![
+            "1".to_string(),
+            "1".to_string(),
+            "1".to_string(),
+            "0".to_string(),
+        ];
+
+        let sim = QuantumSimulator::new(1);
+        let qcbm_runner = QcbmRunner::new(sim, simple_ry_ansatz, &training_data);
+        let mut params = vec![0.1];
+        // Using the new optimizer
+        let mut optimizer = GradientDescentOptimizer::new(0.1);
+        qcbm_runner.train(&mut params, &mut optimizer, 100);
+
+        let final_param = params[0];
+        assert!(
+            (final_param.cos() - target_angle.cos()).abs() < 0.2,
+            "Learned parameter is not close to target with Gradient Descent"
+        );
+        let final_dist = qcbm_runner.get_model_distribution(&params);
+        assert!((final_dist.get("0").unwrap_or(&0.0) - 0.25).abs() < 0.1);
+        assert!((final_dist.get("1").unwrap_or(&0.0) - 0.75).abs() < 0.1);
     }
 }

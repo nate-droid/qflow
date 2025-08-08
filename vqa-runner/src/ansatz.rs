@@ -1,7 +1,4 @@
-// In your vqa-runner crate...
-
-// Make sure you have your simulator and its gate types in scope
-use qsim::{QuantumSimulator, Gate}; // Or however you import them
+use qsim::{QuantumSimulator, Gate};
 
 /// Applies a hardware-efficient ansatz to the simulator.
 ///
