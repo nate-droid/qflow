@@ -136,6 +136,28 @@ pub fn parse_qasm(qasm_str: &str) -> (usize, Vec<Gate>) {
     (num_qubits, gates)
 }
 
+pub fn infer_qubits_from_gates(gates: Vec<&Gate>) -> usize {
+    let mut max_ix: Option<usize> = None;
+    let mut bump = |ix: usize| {
+        max_ix = Some(max_ix.map_or(ix, |m| m.max(ix)));
+    };
+
+    for g in gates {
+        match *g {
+            Gate::RX { qubit, .. } |
+            Gate::RY { qubit, .. } |
+            Gate::RZ { qubit, .. } |
+            Gate::H  { qubit, .. } => bump(qubit),
+
+            Gate::CNOT { control, target } => { bump(control); bump(target); }
+
+            // If you have other variants touching qubits, add them here.
+            _ => {}
+        }
+    }
+    max_ix.map_or(0, |m| m + 1)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

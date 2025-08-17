@@ -4,6 +4,9 @@ pub mod state;
 
 pub mod circuit;
 pub mod events;
+pub mod api;
+pub mod statevector_backend;
+pub mod facade;
 
 pub use parser::{Gate, parse_qasm};
 pub use simulator::QuantumSimulator;

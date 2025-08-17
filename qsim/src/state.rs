@@ -1,11 +1,13 @@
+use std::collections::HashMap;
 use crate::simulator::QuantumGate;
 use num_complex::Complex;
 use rand::Rng;
 use rand::distributions::{Distribution, WeightedIndex};
 use serde::Serialize;
 use std::ops::Deref;
+use crate::api::Pauli;
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, Debug)]
 pub struct StateVector {
     pub num_qubits: usize,
     #[serde(rename = "amplitudes")]
@@ -15,6 +17,100 @@ pub struct StateVector {
 impl StateVector {
     pub fn as_mut_slice(&mut self) -> &mut [Complex<f64>] {
         self.amplitudes.as_mut_slice()
+    }
+
+    pub fn measure_qubit_in_z<R: Rng + ?Sized>(&mut self, qubit: usize, rng: &mut R) -> u8 {
+        assert!(qubit < self.num_qubits, "qubit out of range");
+
+        let n = self.num_qubits;
+        let stride = 1usize << qubit;
+
+        // P(1) = sum |amp[i]|^2 over basis states where bit 'qubit' == 1
+        let mut p1 = 0.0f64;
+        for i in 0..self.amplitudes.len() {
+            if (i & stride) != 0 {
+                p1 += self.amplitudes[i].norm_sqr();
+            }
+        }
+
+        // Sample outcome
+        let r: f64 = rng.r#gen();
+        let outcome = if r < p1 { 1u8 } else { 0u8 };
+
+        // Collapse amplitudes inconsistent with outcome and renormalize
+        let p_keep = if outcome == 1 { p1 } else { 1.0 - p1 };
+        let norm = if p_keep > 0.0 { p_keep.sqrt() } else { 1.0 };
+
+        for i in 0..self.amplitudes.len() {
+            let bit = ((i & stride) != 0) as u8;
+            if bit != outcome {
+                self.amplitudes[i] = Complex::new(0.0, 0.0);
+            } else if norm != 0.0 {
+                self.amplitudes[i] /= norm;
+            }
+        }
+
+        outcome
+    }
+
+    /// ⟨ψ|P|ψ⟩ for a Pauli string, non-destructive.
+    pub fn expectation_pauli_string(&self, ops: &[(Pauli, usize)]) -> f64 {
+        // Build |φ⟩ = P|ψ⟩ by applying each single-qubit Pauli to a clone
+        let mut phi = self.clone();
+
+        let i = Complex::new(0.0, 1.0);
+        let id = [
+            [Complex::new(1.0, 0.0), Complex::new(0.0, 0.0)],
+            [Complex::new(0.0, 0.0), Complex::new(1.0, 0.0)],
+        ];
+        let x = [
+            [Complex::new(0.0, 0.0), Complex::new(1.0, 0.0)],
+            [Complex::new(1.0, 0.0), Complex::new(0.0, 0.0)],
+        ];
+        let y = [
+            [Complex::new(0.0, 0.0), -i],
+            [i, Complex::new(0.0, 0.0)],
+        ];
+        let z = [
+            [Complex::new(1.0, 0.0), Complex::new(0.0, 0.0)],
+            [Complex::new(0.0, 0.0), Complex::new(-1.0, 0.0)],
+        ];
+
+        for &(p, q) in ops {
+            match p {
+                Pauli::I => phi.apply_single_qubit_gate(&id, q),
+                Pauli::X => phi.apply_single_qubit_gate(&x, q),
+                Pauli::Y => phi.apply_single_qubit_gate(&y, q),
+                Pauli::Z => phi.apply_single_qubit_gate(&z, q),
+            }
+        }
+
+        // ⟨ψ|φ⟩
+        let mut acc = Complex::new(0.0, 0.0);
+        for (a, b) in self.amplitudes.iter().zip(phi.amplitudes.iter()) {
+            acc += a.conj() * b;
+        }
+        // Expectation for Hermitian Pauli strings should be real; return Re just in case
+        acc.re
+    }
+
+    /// Sample computational-basis outcomes `shots` times and return counts.
+    pub fn sample_counts(&self, shots: u32) -> HashMap<String, u32> {
+        let probs: Vec<f64> = self.amplitudes.iter().map(|a| a.norm_sqr()).collect();
+        // WeightedIndex expects nonnegative and (usually) sums to ~1
+        let dist = WeightedIndex::new(&probs).expect("invalid probability distribution");
+
+        let mut rng = rand::thread_rng();
+        let mut counts: HashMap<String, u32> = HashMap::new();
+        let width = self.num_qubits;
+
+        for _ in 0..shots {
+            let idx = dist.sample(&mut rng);
+            // bitstring with q_{width-1} ... q_0 (MSB..LSB)
+            let bitstr = format!("{:0width$b}", idx, width = width);
+            *counts.entry(bitstr).or_insert(0) += 1;
+        }
+        counts
     }
 }
 

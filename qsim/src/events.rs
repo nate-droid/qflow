@@ -2,7 +2,7 @@ use crate::state::StateVector;
 use serde::Serialize;
 use std::io::Write;
 
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 #[serde(tag = "eventType")]
 pub enum Event {
     SimulationStart(SimulationStartInfo),
@@ -10,14 +10,14 @@ pub enum Event {
     MeasurementResult(MeasurementInfo),
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct SimulationStartInfo {
     pub num_qubits: usize,
     pub num_gates: usize,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct GateInfo {
     pub step: usize,
@@ -25,7 +25,7 @@ pub struct GateInfo {
     pub state_vector: StateVector,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct MeasurementInfo {
     pub classical_outcome: usize,
