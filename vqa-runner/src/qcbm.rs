@@ -244,7 +244,7 @@ where
                     let term_target: f64 = target_vecs.iter().map(|x| kernel(x, &vec_z)).sum();
                     let d_mmd_dp_z = 2.0
                         * (term_model / model_vecs.len() as f64
-                        - term_target / target_vecs.len() as f64);
+                            - term_target / target_vecs.len() as f64);
 
                     let p_plus_z = dist_plus.get(&bitstring_z).unwrap_or(&0.0);
                     let p_minus_z = dist_minus.get(&bitstring_z).unwrap_or(&0.0);

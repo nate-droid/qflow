@@ -1,7 +1,7 @@
-use crate::{parse_qasm, Gate};
+use crate::api::SimError;
+use crate::{Gate, parse_qasm};
 use serde::Deserialize;
 use std::fmt;
-use crate::api::SimError;
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -53,7 +53,9 @@ impl Circuit {
         let (num_qubits, gates) = parse_qasm(src);
         let mut c = Circuit::with_qubits(num_qubits);
         // Put each gate in its own moment by default (keeps ordering simple)
-        for g in gates { c.add_moment(vec![g]); }
+        for g in gates {
+            c.add_moment(vec![g]);
+        }
         Ok(c)
     }
 }

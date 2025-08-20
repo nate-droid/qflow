@@ -492,7 +492,7 @@ async fn run_ml_svm(
             }
         }
     });
-    
+
     let job_api: Api<Job> = Api::namespaced(state.client.clone(), namespace);
     let job: Job =
         serde_json::from_value(job_spec).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;

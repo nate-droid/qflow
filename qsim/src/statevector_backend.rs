@@ -1,12 +1,12 @@
 // src/simulator/statevector_backend.rs
-use crate::{StateVector};
+use crate::StateVector;
+use crate::api::{Pauli, SimError, SimulatorApi};
+use crate::circuit::Circuit;
 use crate::parser::Gate;
-use crate::api::{SimulatorApi, SimError, Pauli};
 use num_complex::Complex;
 use rand::thread_rng;
 use std::collections::HashMap;
 use std::f64::consts::FRAC_1_SQRT_2;
-use crate::circuit::Circuit;
 
 pub struct StatevectorSimulator {
     num_qubits: usize,
@@ -15,14 +15,23 @@ pub struct StatevectorSimulator {
 
 impl StatevectorSimulator {
     pub fn new(num_qubits: usize) -> Self {
-        Self { num_qubits, state: StateVector::new(num_qubits) }
+        Self {
+            num_qubits,
+            state: StateVector::new(num_qubits),
+        }
     }
 
     fn apply_gate(&mut self, g: &Gate) {
         // Constants
         let h = [
-            [Complex::new(FRAC_1_SQRT_2, 0.0), Complex::new(FRAC_1_SQRT_2, 0.0)],
-            [Complex::new(FRAC_1_SQRT_2, 0.0), Complex::new(-FRAC_1_SQRT_2, 0.0)],
+            [
+                Complex::new(FRAC_1_SQRT_2, 0.0),
+                Complex::new(FRAC_1_SQRT_2, 0.0),
+            ],
+            [
+                Complex::new(FRAC_1_SQRT_2, 0.0),
+                Complex::new(-FRAC_1_SQRT_2, 0.0),
+            ],
         ];
         let x = [
             [Complex::new(0.0, 0.0), Complex::new(1.0, 0.0)],
@@ -115,10 +124,14 @@ impl SimulatorApi for StatevectorSimulator {
         Ok(())
     }
 
-    fn statevector(&self) -> &StateVector { &self.state }
+    fn statevector(&self) -> &StateVector {
+        &self.state
+    }
 
     fn measure(&mut self, qubit: usize) -> Result<u8, SimError> {
-        if qubit >= self.num_qubits { return Err(SimError::Qubit(qubit)); }
+        if qubit >= self.num_qubits {
+            return Err(SimError::Qubit(qubit));
+        }
         // Prefer the single-qubit collapse if you added it; otherwise use measure_all and extract the bit.
         #[allow(unused_mut)]
         let mut outcome = None;

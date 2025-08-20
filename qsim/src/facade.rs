@@ -1,7 +1,7 @@
 // src/facade.rs
-use crate::api::{SimulatorApi, SimError, Pauli};
-use crate::circuit::Circuit;
 use crate::StateVector;
+use crate::api::{Pauli, SimError, SimulatorApi};
+use crate::circuit::Circuit;
 use crate::statevector_backend::StatevectorSimulator;
 
 pub fn run_qasm_return_statevector(qasm: &str) -> Result<StateVector, SimError> {
@@ -25,9 +25,10 @@ pub fn run_qasm_measure(qasm: &str, qubit: usize) -> Result<u8, SimError> {
     sim.measure(qubit)
 }
 
-pub fn run_qasm_counts(qasm: &str, shots: u32)
-                       -> Result<std::collections::HashMap<String,u32>, SimError>
-{
+pub fn run_qasm_counts(
+    qasm: &str,
+    shots: u32,
+) -> Result<std::collections::HashMap<String, u32>, SimError> {
     let circ = Circuit::from_qasm(qasm)?;
     let mut sim = StatevectorSimulator::new(circ.num_qubits);
     sim.run(&circ)?;

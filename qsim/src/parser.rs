@@ -144,12 +144,15 @@ pub fn infer_qubits_from_gates(gates: Vec<&Gate>) -> usize {
 
     for g in gates {
         match *g {
-            Gate::RX { qubit, .. } |
-            Gate::RY { qubit, .. } |
-            Gate::RZ { qubit, .. } |
-            Gate::H  { qubit, .. } => bump(qubit),
+            Gate::RX { qubit, .. }
+            | Gate::RY { qubit, .. }
+            | Gate::RZ { qubit, .. }
+            | Gate::H { qubit, .. } => bump(qubit),
 
-            Gate::CNOT { control, target } => { bump(control); bump(target); }
+            Gate::CNOT { control, target } => {
+                bump(control);
+                bump(target);
+            }
 
             // If you have other variants touching qubits, add them here.
             _ => {}

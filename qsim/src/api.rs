@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 // src/api.rs
-use crate::{StateVector};
+use crate::StateVector;
 use crate::circuit::Circuit;
 use crate::statevector_backend::StatevectorSimulator;
 
@@ -16,7 +16,12 @@ pub enum SimError {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub enum Pauli { I, X, Y, Z }
+pub enum Pauli {
+    I,
+    X,
+    Y,
+    Z,
+}
 
 /// Everything users typically want to do.
 pub trait SimulatorApi {
@@ -33,12 +38,13 @@ pub trait SimulatorApi {
 
     /// Sample computational-basis shots without permanently destroying
     /// the original state (implementation can clone internally).
-    fn sample(&self, shots: u32) -> Result<std::collections::HashMap<String,u32>, SimError>;
+    fn sample(&self, shots: u32) -> Result<std::collections::HashMap<String, u32>, SimError>;
 }
 
-
 // Small helper: absolute diff
-fn approx_eq(a: f64, b: f64, tol: f64) -> bool { (a - b).abs() <= tol }
+fn approx_eq(a: f64, b: f64, tol: f64) -> bool {
+    (a - b).abs() <= tol
+}
 
 #[test]
 fn bell_state_expectations() {

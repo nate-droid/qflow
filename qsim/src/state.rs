@@ -1,11 +1,11 @@
-use std::collections::HashMap;
+use crate::api::Pauli;
 use crate::simulator::QuantumGate;
 use num_complex::Complex;
 use rand::Rng;
 use rand::distributions::{Distribution, WeightedIndex};
 use serde::Serialize;
+use std::collections::HashMap;
 use std::ops::Deref;
-use crate::api::Pauli;
 
 #[derive(Serialize, Clone, Debug)]
 pub struct StateVector {
@@ -67,10 +67,7 @@ impl StateVector {
             [Complex::new(0.0, 0.0), Complex::new(1.0, 0.0)],
             [Complex::new(1.0, 0.0), Complex::new(0.0, 0.0)],
         ];
-        let y = [
-            [Complex::new(0.0, 0.0), -i],
-            [i, Complex::new(0.0, 0.0)],
-        ];
+        let y = [[Complex::new(0.0, 0.0), -i], [i, Complex::new(0.0, 0.0)]];
         let z = [
             [Complex::new(1.0, 0.0), Complex::new(0.0, 0.0)],
             [Complex::new(0.0, 0.0), Complex::new(-1.0, 0.0)],
